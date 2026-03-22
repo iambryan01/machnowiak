@@ -5,87 +5,68 @@
     <title>MACHNOWIAK 2.0 ULTIMATE</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-    :root { --bg: #0f0c29; --accent: #3498db; --gold: #f1c40f; --danger: #e74c3c; }
-    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
-    
-    #sidebar { width: 220px; background: rgba(0,0,0,0.6); border-right: 2px solid var(--accent); padding: 20px; display: flex; flex-direction: column; z-index: 10; }
-    .player-card { background: rgba(255,255,255,0.05); padding: 10px; margin: 5px 0; border-radius: 8px; border-left: 4px solid transparent; }
-    .player-card.active { border-left-color: var(--gold); background: rgba(241, 196, 15, 0.1); }
+        :root { --bg: #0f0c29; --accent: #3498db; --gold: #f1c40f; --danger: #e74c3c; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        #sidebar { width: 220px; background: rgba(0,0,0,0.6); border-right: 2px solid var(--accent); padding: 20px; display: flex; flex-direction: column; z-index: 10; }
+        .player-card { background: rgba(255,255,255,0.05); padding: 10px; margin: 5px 0; border-radius: 8px; border-left: 4px solid transparent; }
+        .player-card.active { border-left-color: var(--gold); background: rgba(241, 196, 15, 0.1); }
+        .sks-tag { font-size: 0.7rem; color: #888; font-style: italic; }
 
-    #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 20px; overflow-y: auto; position: relative; }
-    
-    .btn-new-game { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; padding: 8px 15px; font-size: 0.8rem; cursor: pointer; border: none; border-radius: 5px; }
+        #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 20px; overflow-y: auto; position: relative; }
+        .btn-new-game { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; padding: 8px 15px; font-size: 0.8rem; cursor: pointer; border: none; border-radius: 5px; }
 
-    /* POPRAWIONY STÓŁ */
-    #stół { 
-        background: rgba(255,255,255,0.03); 
-        width: 90%; 
-        height: 400px; 
-        border-radius: 30px; 
-        border: 2px dashed #444; 
-        display: flex; 
-        flex-direction: row; /* Stosy obok siebie */
-        justify-content: center; 
-        align-items: flex-start; 
-        gap: 80px; /* Odstęp między graczami */
-        margin: 20px; 
-        padding-top: 80px; /* Miejsce na nicki */
-        position: relative;
-    }
+        /* NAPRAWA STOŁU */
+        #stół { 
+            background: rgba(255,255,255,0.03); 
+            width: 90%; 
+            height: 400px; 
+            border-radius: 30px; 
+            border: 2px dashed #444; 
+            display: flex; 
+            flex-direction: row; 
+            justify-content: center; 
+            align-items: flex-start; 
+            gap: 80px; 
+            margin: 20px; 
+            padding-top: 80px; 
+            position: relative;
+        }
 
-    /* KONTENER NA KARTY JEDNEGO GRACZA */
-    .card-stack { 
-        position: relative; 
-        width: 90px; 
-        height: 130px; 
-        display: flex;
-        flex-direction: column;
-    }
+        .card-stack { position: relative; width: 90px; height: 130px; }
+        .stack-info { 
+            position: absolute; top: -70px; width: 150px; left: 50%; transform: translateX(-50%);
+            text-align: center; color: var(--gold); font-weight: bold; font-size: 1rem;
+            background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; pointer-events: none;
+        }
 
-    /* NICK I PUNKTY NAD KARTAMI */
-    .stack-info { 
-        position: absolute; 
-        top: -60px; /* Wypchnięcie nad stos */
-        width: 150px; 
-        left: 50%;
-        transform: translateX(-50%);
-        text-align: center; 
-        color: var(--gold); 
-        font-weight: bold; 
-        font-size: 1rem;
-        background: rgba(0,0,0,0.4);
-        padding: 5px;
-        border-radius: 5px;
-    }
+        .karta { 
+            width: 90px; height: 130px; background: white; color: black; border-radius: 10px; 
+            border: 2px solid #222; position: absolute; cursor: pointer; transition: 0.2s;
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
+        }
+        .karta .val-top { position: absolute; top: 5px; left: 8px; font-weight: 900; font-size: 1.2rem; }
+        .karta .suit-top { position: absolute; top: 25px; left: 8px; font-size: 0.9rem; }
+        .karta.red { color: var(--danger); }
+        .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border-color: white; }
 
-    .karta { 
-        width: 90px; height: 130px; background: white; color: black; border-radius: 10px; 
-        border: 2px solid #222; position: absolute; cursor: pointer; transition: 0.2s;
-        box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
-    }
-    .karta .val-top { position: absolute; top: 5px; left: 8px; font-weight: 900; font-size: 1.2rem; }
-    .karta .suit-top { position: absolute; top: 25px; left: 8px; font-size: 0.9rem; }
-    .karta.red { color: var(--danger); }
-    .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border-color: white; }
+        /* Odstępy kart w stosie */
+        .karta:nth-child(2) { top: 35px; z-index: 1; }
+        .karta:nth-child(3) { top: 70px; z-index: 2; }
+        .karta:nth-child(4) { top: 105px; z-index: 3; }
+        .karta:nth-child(5) { top: 140px; z-index: 4; }
 
-    /* OFFSETY DLA KART W STOSIE (Punkt 4) */
-    .karta:nth-child(2) { top: 35px; left: 2px; z-index: 1; }
-    .karta:nth-child(3) { top: 70px; left: 4px; z-index: 2; }
-    .karta:nth-child(4) { top: 105px; left: 6px; z-index: 3; }
-    .karta:nth-child(5) { top: 140px; left: 8px; z-index: 4; }
+        #reka { display: flex; gap: 10px; padding: 20px; min-height: 160px; justify-content: center; width: 100%; }
+        #reka .karta { position: relative; top: 0 !important; }
 
-    #pick-menu, #target-menu, #sks-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; border: 4px solid var(--gold); padding: 30px; border-radius: 20px; z-index: 3000; box-shadow: 0 0 100px rgba(0,0,0,0.9); text-align: center; }
-    
-    .controls { margin: 20px; display: flex; gap: 10px; }
-    button { padding: 12px 25px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
-    .btn-start { background: #27ae60; color: white; }
-    .btn-blef { background: var(--danger); color: white; }
-    .btn-sks { background: var(--gold); color: #000; }
-    
-    #reka { display: flex; gap: 10px; padding: 20px; min-height: 160px; justify-content: center; width: 100%; }
-    /* Karty w ręce nie powinny być absolute */
-    #reka .karta { position: relative; top: 0 !important; left: 0 !important; }
-</style>
+        #pick-menu, #target-menu, #sks-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; border: 4px solid var(--gold); padding: 30px; border-radius: 20px; z-index: 3000; box-shadow: 0 0 100px rgba(0,0,0,0.9); text-align: center; }
+        
+        button { padding: 12px 25px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-start { background: #27ae60; color: white; }
+        .btn-blef { background: var(--danger); color: white; }
+        .btn-sks { background: var(--gold); color: #000; }
+        .btn-no { background: #7f8c8d; color: white; margin-left: 10px; }
+    </style>
 </head>
 <body>
     <div id="sidebar">
@@ -96,7 +77,7 @@
     <div id="game-area">
         <button class="btn-new-game" onclick="socket.emit('new-game-request')">NOWA GRA (RESET)</button>
         <h1>⚔️ MACHNOWIAK 2.0</h1>
-        <div id="status">Czekaj na start...</div>
+        <div id="status" style="color:var(--gold)">Czekaj na start...</div>
         
         <div id="stół"></div>
 
@@ -106,14 +87,14 @@
         </div>
 
         <div id="sks-modal">
-            <h2>🔥 SKS (Ostatnia Szansa)</h2>
-            <p>Czy chcesz użyć SKS w tej turze?<br><small>Można użyć tylko RAZ na całą grę.</small></p>
-            <button class="btn-sks" onclick="confirmSKS(true)">TAK, DAWAJ!</button>
-            <button class="btn-no" onclick="confirmSKS(false)">NIE, CZEKAM</button>
+            <h2>🔥 SKS?</h2>
+            <p>Użyć SKS w tej turze?<br><small>(Raz na grę)</small></p>
+            <button class="btn-sks" onclick="confirmSKS(true)">TAK</button>
+            <button class="btn-no" onclick="confirmSKS(false)">NIE</button>
         </div>
 
         <div id="pick-menu">
-            <h2 id="pick-title">Nagroda! Wybierz 2 karty:</h2>
+            <h2 id="pick-title">Wybierz karty:</h2>
             <div id="pick-cards-grid" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
         </div>
 
@@ -123,7 +104,7 @@
         </div>
 
         <h3>TWOJA RĘKA:</h3>
-        <div id="reka" style="display:flex; gap:10px; padding:20px; flex-wrap:wrap; justify-content:center;"></div>
+        <div id="reka"></div>
     </div>
 
     <script>
@@ -140,7 +121,7 @@
             document.getElementById('player-list').innerHTML = list.map(p => `
                 <div class="player-card ${p.isCurrent ? 'active' : ''}">
                     <strong>${p.name}</strong><br>Karty: ${p.count}
-                    ${p.sksUsed ? '<div class="sks-used">SKS zużyty</div>' : ''}
+                    ${p.sksUsed ? '<br><span class="sks-tag">SKS zużyty</span>' : ''}
                 </div>
             `).join('');
         });
@@ -163,79 +144,62 @@
             return div;
         }
 
-        // Punkt 5: Powiadomienie SKS
-        socket.on('show-sks-modal', () => {
-            if (!mySksUsed) {
-                document.getElementById('sks-modal').style.display = 'block';
-            }
-        });
-
-        function confirmSKS(choice) {
-            if (choice) {
-                socket.emit('use-sks');
-                mySksUsed = true;
-            }
-            document.getElementById('sks-modal').style.display = 'none';
-        }
-
-        // Punkt 4: Wyświetlanie kart na stole (Nick na górze)
         socket.on('reveal-detailed', data => {
             const stol = document.getElementById('stół');
             stol.innerHTML = '';
             data.forEach(p => {
                 const stack = document.createElement('div');
                 stack.className = 'card-stack';
-                
-                // Info o graczu NAD kartami
                 const info = document.createElement('div');
                 info.className = 'stack-info';
                 info.innerHTML = `${p.name}<br>${p.finalPower} pkt`;
                 stack.appendChild(info);
 
-                p.cards.forEach((c, i) => {
-                    const cardDiv = createCardElement(c);
-                    stack.appendChild(cardDiv);
-                });
+                p.cards.forEach(c => stack.appendChild(createCardElement(c)));
                 stol.appendChild(stack);
             });
         });
 
-        // Punkt 2: Pokazywanie kart z Buły
+        socket.on('show-sks-modal', () => {
+            if (!mySksUsed) document.getElementById('sks-modal').style.display = 'block';
+        });
+
+        function confirmSKS(choice) {
+            if (choice) { socket.emit('use-sks'); mySksUsed = true; }
+            document.getElementById('sks-modal').style.display = 'none';
+        }
+
         socket.on('reveal-bula', bulaData => {
-            let msg = "Karty dobrane w BUŁĘ:\n";
-            bulaData.forEach(b => {
-                msg += `${b.name}: ${b.cards.map(c => c.value + c.suit).join(', ')}\n`;
-            });
-            alert(msg); // Można to zmienić na ładniejszy div, ale alert gwarantuje, że każdy zauważy
+            let msg = bulaData.map(b => `${b.name} dobrał: ${b.cards.map(c => c.value + c.suit).join(', ')}`).join('\n');
+            alert("⚔️ BUŁA!\n" + msg);
         });
 
-        socket.on('clear-table', () => {
-            document.getElementById('stół').innerHTML = '';
-            mySksUsed = false; // Reset przy nowej grze
-        });
-
-        socket.on('update-status', msg => document.getElementById('status').innerText = msg);
-
-        socket.on('card-placed', data => {
+        socket.on('card-placed', () => {
             const stol = document.getElementById('stół');
             const card = document.createElement('div');
             card.className = 'karta zakryta';
+            card.style.position = 'relative'; // Tymczasowo dla efektu czekania
             stol.appendChild(card);
         });
+
+        socket.on('clear-table', () => { 
+            document.getElementById('stół').innerHTML = ''; 
+            mySksUsed = false; 
+        });
+        
+        socket.on('update-status', msg => document.getElementById('status').innerText = msg);
+        socket.on('game-begun', () => document.getElementById('start-btn').style.display = 'none');
 
         socket.on('show-pick-menu', data => {
             const menu = document.getElementById('pick-menu');
             const grid = document.getElementById('pick-cards-grid');
-            document.getElementById('pick-title').innerText = data.title;
             menu.style.display = 'block';
             grid.innerHTML = '';
             selectedForPick = [];
             data.pool.forEach(k => {
                 const div = createCardElement(k);
                 div.onclick = () => {
-                    if (div.style.border.includes('gold')) return;
                     div.style.border = '4px solid gold';
-                    div.style.transform = 'scale(1.05)';
                     selectedForPick.push(k);
                     if (selectedForPick.length === data.count) {
                         socket.emit('pick-finished', { pickedCards: selectedForPick, targetIdx: data.targetIdx });
@@ -255,16 +219,9 @@
                 const btn = document.createElement('button');
                 btn.className = 'btn-sks';
                 btn.innerText = t;
-                btn.onclick = () => {
-                    socket.emit('target-selected', t);
-                    menu.style.display = 'none';
-                };
+                btn.onclick = () => { socket.emit('target-selected', t); menu.style.display = 'none'; };
                 list.appendChild(btn);
             });
-        });
-
-        socket.on('game-begun', () => {
-            document.getElementById('start-btn').style.display = 'none';
         });
     </script>
 </body>
