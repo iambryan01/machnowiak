@@ -13,7 +13,7 @@ let players = [];
 let gameStarted = false;
 let tableCards = []; 
 let lastPlayerIdx = -1;
-let currentPlayerIdx = 0; // NOWE: Śledzenie czyja tura
+let currentPlayerIdx = 0; 
 let lastMoveWasBlef = false;
 let canCheckBlef = false; 
 let sksResponses = 0;
@@ -57,7 +57,7 @@ io.on('connection', (socket) => {
         gameDeck = createDeck();
         tableCards = [];
         lastPlayerIdx = -1;
-        currentPlayerIdx = 0; // Zaczyna pierwszy gracz
+        currentPlayerIdx = 0; 
         canCheckBlef = false;
         wasBulaInRound = false;
         players.forEach(p => {
@@ -69,7 +69,7 @@ io.on('connection', (socket) => {
         });
         io.emit('game-begun');
         io.emit('clear-table');
-        io.emit('update-status', `Tura gracza: ${players[currentPlayerIdx].name}`);
+        io.emit('update-status', `ZACZYNA: ${players[currentPlayerIdx].name}`);
         updatePlayerList();
     }
 
@@ -77,9 +77,8 @@ io.on('connection', (socket) => {
         const pIdx = players.findIndex(pl => pl.id === socket.id);
         const p = players[pIdx];
         
-        // NOWE: Sprawdzenie kolejności
         if (!gameStarted || p.hasPlayed || pIdx !== currentPlayerIdx) {
-            socket.emit('error-msg', "To nie jest Twoja tura!");
+            socket.emit('error-msg', "To nie Twoja tura!");
             return;
         }
 
@@ -108,7 +107,6 @@ io.on('connection', (socket) => {
 
     socket.on('check-blef', () => {
         const checkerIdx = players.findIndex(p => p.id === socket.id);
-        // Sprawdzić może tylko osoba, której jest tura (następna w kolejce)
         if (!canCheckBlef || checkerIdx !== currentPlayerIdx) {
             socket.emit('error-msg', "Tylko gracz wykonujący ruch może sprawdzić poprzednika!");
             return;
@@ -119,48 +117,57 @@ io.on('connection', (socket) => {
         const checker = players[checkerIdx];
         const pool = gameDeck.splice(0, 10);
         
+        io.emit('reveal-blef-anim', { player: attacker.name, cards: attacker.currentCombo });
+
+        let winnerIdx;
         if (lastMoveWasBlef) {
-            io.emit('update-status', `🚨 ${checker.name} przyłapał ${attacker.name} na kłamstwie!`);
+            io.emit('update-status', `🚨 ${checker.name} złapał ${attacker.name} na blefie! RESET STOŁU.`);
+            winnerIdx = checkerIdx;
             let currentCount = attacker.hand.length;
             attacker.hand = gameDeck.splice(0, Math.max(0, currentCount - 2) + 4);
-            io.to(checker.id).emit('show-pick-menu', { 
-                pool, count: 2, targetIdx: lastPlayerIdx, 
-                title: `WYBIERZ 2 ZŁOŚLIWE KARTY DLA ${attacker.name}:` 
-            });
+            io.to(checker.id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: `DAJ 2 KARTY DLA ${attacker.name}:` });
         } else {
-            io.emit('update-status', `✅ ${attacker.name} mówił prawdę! ${checker.name} dostaje 4 karne.`);
+            io.emit('update-status', `✅ ${attacker.name} nie kłamał! ${checker.name} dostaje karne. RESET STOŁU.`);
+            winnerIdx = lastPlayerIdx;
             checker.hand.push(...gameDeck.splice(0, 4));
             io.to(checker.id).emit('init-hand', checker.hand);
             let currentCount = attacker.hand.length;
             attacker.hand = gameDeck.splice(0, Math.max(0, currentCount - 2));
-            io.to(attacker.id).emit('show-pick-menu', { 
-                pool, count: 2, targetIdx: lastPlayerIdx, 
-                title: `WYBIERZ DLA SIEBIE 2 NAJLEPSZE KARTY:` 
-            });
+            io.to(attacker.id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: `WYBIERZ DLA SIEBIE 2 KARTY:` });
         }
-        updatePlayerList();
+
+        // RESET PO BLEFIE: Karty wracają do talii, tylko UŻYTY Joker płonie
+        setTimeout(() => {
+            const allOnTable = tableCards.flatMap(m => m.cards);
+            // Tylko Jokery, które były w "combo" (czyli zostały użyte/rzucone), są usuwane
+            const toReturn = allOnTable.filter(c => c.value !== 'Joker');
+            gameDeck.push(...toReturn);
+            
+            tableCards = [];
+            players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; });
+            currentPlayerIdx = winnerIdx;
+            io.emit('clear-table');
+            io.emit('update-status', `ZACZYNA: ${players[currentPlayerIdx].name}`);
+            updatePlayerList();
+        }, 3000);
     });
 
     socket.on('sks-decision', (decision) => {
         const pIdx = players.findIndex(p => p.id === socket.id);
         const p = players[pIdx];
         sksResponses++;
-
         if (decision && !p.sksUsed) {
             p.sksUsed = true;
             const sksCard = gameDeck.shift();
             const tableMove = tableCards.find(m => m.playerIdx === pIdx);
-            
             if (sksCard.value === 'Joker') {
                 p.hand.push(sksCard);
-                io.emit('update-status', `${p.name} SKS: Joker do ręki!`);
                 io.to(p.id).emit('init-hand', p.hand);
             } else if (tableMove) {
                 tableMove.cards.push(sksCard);
             }
             resolveRound(true, p.name); 
         }
-
         if (sksResponses >= players.length) {
             sksResponses = 0;
             startRoundCountdown();
@@ -180,12 +187,6 @@ io.on('connection', (socket) => {
         }, 1000);
     }
 
-    socket.on('pick-finished', (data) => {
-        players[data.targetIdx].hand.push(...data.pickedCards);
-        updatePlayerList();
-        io.to(players[data.targetIdx].id).emit('init-hand', players[data.targetIdx].hand);
-    });
-
     socket.on('target-selected', (t) => {
         const p = players.find(pl => pl.id === socket.id);
         p.target = t;
@@ -195,8 +196,8 @@ io.on('connection', (socket) => {
     function finishTurn(p) {
         p.hasPlayed = true;
         tableCards.push({ playerIdx: players.indexOf(p), playerName: p.name, cards: [...p.currentCombo], target: p.target });
+        io.emit('play-sound', 'card');
         
-        // NOWE: Przełączenie tury na następnego gracza
         currentPlayerIdx = (currentPlayerIdx + 1) % players.length;
 
         players.forEach(pl => {
@@ -209,33 +210,28 @@ io.on('connection', (socket) => {
 
         if (tableCards.length === players.length) {
             canCheckBlef = false; 
-            io.emit('update-status', "Wszyscy rzucili! Sprawdzanie wyników...");
             setTimeout(() => resolveRound(false), 1500);
         } else {
-            io.emit('update-status', `Tura gracza: ${players[currentPlayerIdx].name}`);
+            io.emit('update-status', `Tura: ${players[currentPlayerIdx].name}`);
         }
         updatePlayerList();
     }
 
-    function calculatePower(cards, isBulaExtra) {
+    function calculatePower(cards, isBula) {
         let pwr = 0;
         const base = cards.filter(c => c.value !== '8' && c.value !== '2' && c.value !== 'Joker');
         pwr = base.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
         if (cards.some(c => c.value === '2')) pwr *= 2;
-        
-        if (isBulaExtra) {
+        if (isBula) {
             cards.forEach(c => {
-                if (c.value === '8') {
-                    const penalty = (c.suit === '♥' || c.suit === '♦') ? 8 : 4;
-                    pwr -= penalty;
-                }
+                if (c.value === '8') pwr -= (c.suit === '♥' || c.suit === '♦') ? 8 : 4;
             });
         }
         return pwr;
     }
 
-    function resolveRound(isSksUpdate, sksUser = null) {
-        let results = tableCards.map(m => ({ 
+    function resolveRound(isSks, sksUser) {
+        let res = tableCards.map(m => ({ 
             playerIdx: m.playerIdx, playerName: m.playerName, power: calculatePower(m.cards, wasBulaInRound), m: m 
         }));
 
@@ -243,36 +239,26 @@ io.on('connection', (socket) => {
             tableCards.forEach(move => {
                 move.cards.forEach(card => {
                     if (card.value === '8' && move.target) {
-                        const penalty = (card.suit === '♥' || card.suit === '♦') ? 8 : 4;
-                        const targetRes = results.find(r => r.playerName === move.target);
-                        if (targetRes) targetRes.power -= penalty;
+                        const p = (card.suit === '♥' || card.suit === '♦') ? 8 : 4;
+                        const t = res.find(r => r.playerName === move.target);
+                        if (t) t.power -= p;
                     }
                 });
             });
         }
 
-        io.emit('reveal-detailed', results.map(r => ({ name: r.playerName, cards: r.m.cards, finalPower: r.power })));
+        io.emit('reveal-detailed', res.map(r => ({ name: r.playerName, cards: r.m.cards, finalPower: r.power })));
 
-        let maxP = Math.max(...results.map(r => r.power));
-        let minP = Math.min(...results.map(r => r.power));
-        let top = results.filter(r => r.power === maxP);
-        let loser = results.find(r => r.power === minP);
-
-        if (isSksUpdate && sksUser) {
-            if (top.length > 1 && top.some(t => t.playerName === sksUser)) {
-                io.emit('update-status', `BUŁA! ${sksUser} wyrównał SKS-em!`);
-            } else if (loser.playerName === sksUser) {
-                io.emit('update-status', `${sksUser} użył SKS, ale nadal ${loser.playerName} zabiera karty.`);
-            } else {
-                io.emit('update-status', `${sksUser} użył SKS i teraz ${loser.playerName} zabiera karty!`);
-            }
-        }
+        let maxP = Math.max(...res.map(r => r.power));
+        let minP = Math.min(...res.map(r => r.power));
+        let top = res.filter(r => r.power === maxP);
+        let loser = res.find(r => r.power === minP);
 
         if (top.length > 1) {
             wasBulaInRound = true;
             top.forEach(t => {
-                let extras = gameDeck.splice(0, 2);
-                extras.forEach(c => {
+                let ex = gameDeck.splice(0, 2);
+                ex.forEach(c => {
                     if (c.value === 'Joker') {
                         players[t.playerIdx].hand.push(c);
                         io.to(players[t.playerIdx].id).emit('init-hand', players[t.playerIdx].hand);
@@ -281,28 +267,29 @@ io.on('connection', (socket) => {
             });
             io.emit('update-status', "⚔️ BUŁA! Dogrywka...");
             setTimeout(() => resolveRound(false), 2000);
-        } else if (!isSksUpdate) {
-            const allTableCards = tableCards.flatMap(m => m.cards);
-            const validCards = allTableCards.filter(c => c.value !== 'Joker');
-            const jokerDetected = allTableCards.length !== validCards.length;
-
+        } else if (!isSks) {
+            const all = tableCards.flatMap(m => m.cards);
+            const valid = all.filter(c => c.value !== 'Joker');
+            
+            // Karty idą do przegranego lub do talii po Buli
             if (wasBulaInRound) {
                 players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
-                gameDeck.push(...validCards);
-                io.emit('update-status', `PO BULI: ${loser.playerName} miał najmniej i dostaje 4 karne!`);
+                gameDeck.push(...valid);
             } else {
-                players[loser.playerIdx].hand.push(...validCards);
-                io.emit('update-status', `KONIEC: ${loser.playerName} zabiera karty!`);
+                players[loser.playerIdx].hand.push(...valid);
             }
-            
             wasBulaInRound = false; 
             io.emit('show-sks-modal'); 
         }
     }
 
     function cleanTable() {
+        const allOnTable = tableCards.flatMap(m => m.cards);
+        const toReturn = allOnTable.filter(c => c.value !== 'Joker');
+        gameDeck.push(...toReturn); // Zwrot kart do talii przed nową rundą
+        
         tableCards = [];
-        currentPlayerIdx = 0; // Reset kolejności na nowy etap
+        currentPlayerIdx = 0;
         players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; });
         io.emit('clear-table');
         io.emit('update-status', `NOWA RUNDA - Zaczyna: ${players[currentPlayerIdx].name}`);
@@ -312,10 +299,7 @@ io.on('connection', (socket) => {
 
     function updatePlayerList() {
         io.emit('update-player-list', players.map((p, idx) => ({
-            name: p.name, 
-            count: p.hand.length, 
-            isCurrent: idx === currentPlayerIdx, // Teraz podświetla osobę, która MA RUCH
-            sksUsed: p.sksUsed
+            name: p.name, count: p.hand.length, isCurrent: idx === currentPlayerIdx, sksUsed: p.sksUsed
         })));
     }
 });
