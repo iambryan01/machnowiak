@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MACHNOWIAK ONLINE — MULTIPLAYER</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #2c3e50; color: white; text-align: center; margin: 0; padding: 20px; }
+        #lista-graczy { position: fixed; right: 20px; top: 20px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; text-align: left; min-width: 150px; }
+        #lista-graczy h4 { margin-top: 0; border-bottom: 1px solid #7f8c8d; padding-bottom: 5px; }
+        .gracz-info { margin-bottom: 5px; font-size: 14px; }
+        h1 { margin-bottom: 10px; }
+        #status { font-weight: bold; color: #f1c40f; margin-bottom: 20px; font-size: 1.2em; height: 1.5em; }
+        #stół { height: 200px; border: 2px dashed #95a5a6; margin: 20px auto; padding: 20px; display: flex; justify-content: center; gap: 10px; max-width: 800px; background: rgba(255,255,255,0.05); border-radius: 15px; }
+        .karta { width: 80px; height: 120px; background: white; color: black; border-radius: 8px; display: inline-block; line-height: 120px; font-weight: bold; cursor: pointer; border: 2px solid #000; font-size: 1.5em; position: relative; box-shadow: 3px 3px 5px rgba(0,0,0,0.5); user-select: none; }
+        .karta:hover { transform: translateY(-10px); background: #f1c40f; }
+        #reka { margin-top: 50px; }
+        #moje-karty { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 8px; font-weight: bold; transition: 0.2s; box-shadow: 0 4px #c0392b; margin: 5px; }
+        button:hover { background: #ff5e4d; }
+        button:active { box-shadow: 0 0 #c0392b; transform: translateY(4px); }
+        #start-btn { background: #27ae60; box-shadow: 0 4px #1e8449; }
+    </style>
+</head>
+<body>
+    <div id="lista-graczy">
+        <h4>GRACZE:</h4>
+        <div id="gracze-kontener"></div>
+    </div>
+
+    <h1>🎴 MACHNOWIAK</h1>
+    <div id="status">Wpisz nick...</div>
+    
+    <div id="lobby-controls">
+        <button id="start-btn" onclick="socket.emit('start-game')">START GRY</button>
+    </div>
+
+    <h3>STÓŁ:</h3>
+    <div id="stół"></div>
+
+    <div id="reka">
+        <h3>TWOJE KARTY:</h3>
+        <div id="moje-karty"></div>
+    </div>
+
+    <br><br>
+    <button onclick="sprawdzBlef()">SPRAWDZAM! (BLEF)</button>
+
+    <script>
+        // WAŻNE: Automatyczne wykrywanie adresu serwera (zamiast localhost)
+        const socket = io(); 
+        
+        let mojaReka = [];
+
+        const mojNick = prompt("Podaj swój nick:", "Gracz " + Math.floor(Math.random()*100));
+        socket.emit('join', mojNick);
+
+        socket.on('init-hand', (hand) => {
+            mojaReka = hand;
+            renderujReke();
+        });
+
+        socket.on('update-status', (msg) => {
+            document.getElementById('status').innerText = msg;
+        });
+
+        socket.on('game-begun', () => {
+            document.getElementById('start-btn').style.display = 'none';
+        });
+
+        socket.on('update-players', (lista) => {
+            const kontener = document.getElementById('gracze-kontener');
+            kontener.innerHTML = '';
+            lista.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'gracz-info';
+                div.innerText = `${p.name}: ${p.cards} kart`;
+                kontener.appendChild(div);
+            });
+        });
+
+        function renderujReke() {
+            const div = document.getElementById('moje-karty');
+            div.innerHTML = '';
+            mojaReka.forEach((karta, index) => {
+                const el = document.createElement('div');
+                el.className = 'karta';
+                if (karta.suit === '♥' || karta.suit === '♦') el.style.color = 'red';
+                let symbol = karta.suit === 'Joker' ? '🃏' : karta.suit;
+                el.innerText = karta.value + symbol;
+                el.onclick = () => rzucKarte(index);
+                div.appendChild(el);
+            });
+        }
+
+        function rzucKarte(index) {
+            socket.emit('play-card', mojaReka[index]);
+            mojaReka.splice(index, 1);
+            renderujReke();
+        }
+
+        socket.on('new-card-on-table', (data) => {
+            const stol = document.getElementById('stół');
+            const el = document.createElement('div');
+            el.className = 'karta';
+            if (data.card.suit === '♥' || data.card.suit === '♦') el.style.color = 'red';
+            let symbol = data.card.suit === 'Joker' ? '🃏' : data.card.suit;
+            el.innerText = data.card.value + symbol;
+            const label = document.createElement('div');
+            label.style.fontSize = "10px";
+            label.style.position = "absolute";
+            label.style.bottom = "-20px";
+            label.style.width = "100%";
+            label.style.color = "white";
+            label.innerText = data.playerName;
+            el.appendChild(label);
+            stol.appendChild(el);
+        });
+
+        socket.on('clear-table', () => {
+            document.getElementById('stół').innerHTML = '';
+        });
+
+        socket.on('blef-result', (data) => {
+            alert(data.msg);
+        });
+
+        socket.on('error-msg', (msg) => {
+            alert(msg);
+        });
+
+        function sprawdzBlef() {
+            socket.emit('check-blef');
+        }
+    </script>
+</body>
+</html>
