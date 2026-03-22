@@ -17,6 +17,7 @@ let lastMoveWasBlef = false;
 let canCheckBlef = false; 
 let sksResponses = 0;
 let roundTimer = null;
+let wasBulaInRound = false;
 
 function createDeck() {
     const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -42,6 +43,7 @@ io.on('connection', (socket) => {
         gameStarted = false;
         tableCards = [];
         sksResponses = 0;
+        wasBulaInRound = false;
         if(roundTimer) clearInterval(roundTimer);
         players.forEach(p => { p.hand = []; p.hasPlayed = false; p.sksUsed = false; });
         io.emit('reset-client-ui');
@@ -54,6 +56,7 @@ io.on('connection', (socket) => {
         tableCards = [];
         lastPlayerIdx = -1;
         canCheckBlef = false;
+        wasBulaInRound = false;
         players.forEach(p => {
             p.hand = gameDeck.splice(0, 5);
             p.hasPlayed = false;
@@ -140,7 +143,6 @@ io.on('connection', (socket) => {
             } else if (tableMove) {
                 tableMove.cards.push(sksCard);
             }
-            // Po każdym SKS sprawdzamy stan stołu i generujemy odpowiedni komunikat
             resolveRound(true, p.name); 
         }
 
@@ -198,6 +200,14 @@ io.on('connection', (socket) => {
         const base = cards.filter(c => c.value !== '8' && c.value !== '2' && c.value !== 'Joker');
         pwr = base.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
         if (cards.some(c => c.value === '2')) pwr *= 2;
+        
+        // Losowe ósemki w Bułę biją właściciela
+        cards.forEach(c => {
+            if (c.value === '8') {
+                const penalty = (c.suit === '♥' || c.suit === '♦') ? 8 : 4;
+                pwr -= penalty;
+            }
+        });
         return pwr;
     }
 
@@ -205,15 +215,6 @@ io.on('connection', (socket) => {
         let results = tableCards.map(m => ({ 
             playerIdx: m.playerIdx, playerName: m.playerName, power: calculatePower(m.cards), m: m 
         }));
-        
-        tableCards.forEach(m => {
-            const eight = m.cards.find(c => c.value === '8');
-            if (eight && m.target) {
-                const penalty = (eight.suit === '♥' || eight.suit === '♦') ? 8 : 4;
-                const target = results.find(r => r.playerName === m.target);
-                if (target) target.power -= penalty;
-            }
-        });
 
         io.emit('reveal-detailed', results.map(r => ({ name: r.playerName, cards: r.m.cards, finalPower: r.power })));
 
@@ -222,18 +223,19 @@ io.on('connection', (socket) => {
         let top = results.filter(r => r.power === maxP);
         let loser = results.find(r => r.power === minP);
 
-        // LOGIKA KOMUNIKATÓW SKS (Punkt 1 i 2)
+        // Komunikaty SKS
         if (isSksUpdate && sksUser) {
             if (top.length > 1 && top.some(t => t.playerName === sksUser)) {
                 io.emit('update-status', `BUŁA! ${sksUser} wyrównał SKS-em!`);
             } else if (loser.playerName === sksUser) {
-                io.emit('update-status', `${sksUser} użył SKS, ale nadal zabiera karty.`);
+                io.emit('update-status', `${sksUser} użył SKS, ale nadal ${loser.playerName} zabiera karty.`);
             } else {
                 io.emit('update-status', `${sksUser} użył SKS i teraz ${loser.playerName} zabiera karty!`);
             }
         }
 
         if (top.length > 1) {
+            wasBulaInRound = true;
             top.forEach(t => {
                 let extras = gameDeck.splice(0, 2);
                 extras.forEach(c => {
@@ -243,18 +245,26 @@ io.on('connection', (socket) => {
                     } else { t.m.cards.push(c); }
                 });
             });
-            io.emit('update-status', "⚔️ BUŁA!");
+            io.emit('update-status', "⚔️ BUŁA! Dogrywka...");
             setTimeout(() => resolveRound(false), 2000);
         } else if (!isSksUpdate) {
-            // Finałowe zabranie kart
-            if (tableCards.some(m => m.cards.length > 5)) {
+            // FINAŁ RUNDY
+            const allTableCards = tableCards.flatMap(m => m.cards);
+            const validCards = allTableCards.filter(c => c.value !== 'Joker');
+            const jokerDetected = allTableCards.length !== validCards.length;
+
+            if (wasBulaInRound) {
+                // Nowa zasada: Przegrany (nawet ten spoza Buły) bierze 4 losowe karty, reszta na spód talii
                 players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
-                gameDeck.push(...tableCards.flatMap(m => m.cards));
-                io.emit('update-status', `PO BULI: ${loser.playerName} dostaje 4 karne!`);
+                gameDeck.push(...validCards);
+                io.emit('update-status', `PO BULI: ${loser.playerName} miał najmniej i dostaje 4 karne! Karty ze stołu idą na spód talii. ${jokerDetected ? 'Joker spłonął.' : ''}`);
             } else {
-                players[loser.playerIdx].hand.push(...tableCards.flatMap(m => m.cards));
-                io.emit('update-status', `${loser.playerName} zabiera karty!`);
+                // Zwykła runda: Przegrany zabiera wszystko ze stołu
+                players[loser.playerIdx].hand.push(...validCards);
+                io.emit('update-status', `KONIEC: ${loser.playerName} zabiera karty ze stołu! ${jokerDetected ? 'Joker spłonął.' : ''}`);
             }
+            
+            wasBulaInRound = false; 
             io.emit('show-sks-modal'); 
         }
     }
