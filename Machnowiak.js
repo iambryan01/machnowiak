@@ -6,14 +6,12 @@ const path = require('path');
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-const cardValues = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, 'Joker': 20 };
+const cardValues = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, 'Joker': 0 };
 
 let gameDeck = [];
 let players = [];
 let gameStarted = false;
 let tableCards = []; 
-let isFirstRound = true;
-let lastMove = null;
 
 function createDeck() {
     const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -29,121 +27,134 @@ function createDeck() {
 io.on('connection', (socket) => {
     socket.on('join', (name) => {
         if (gameStarted) return;
-        players.push({ id: socket.id, name: name, hand: [], sksUsed: false, hasPlayed: false });
+        players.push({ id: socket.id, name: name, hand: [], hasPlayed: false, currentCombo: [], target: null });
         io.emit('update-players', players.map(p => ({name: p.name, cards: p.hand.length})));
     });
 
     socket.on('start-game', () => {
         if (players.length < 2) return;
         gameStarted = true;
-        isFirstRound = true;
         gameDeck = createDeck();
         players.forEach(p => {
             p.hand = gameDeck.splice(0, 5);
-            p.sksUsed = false;
             p.hasPlayed = false;
+            p.currentCombo = [];
             io.to(p.id).emit('init-hand', p.hand);
         });
-        io.emit('update-status', "GRA RUSZYŁA! Rzuć kartę (zakryta).");
         io.emit('game-begun');
+        io.emit('update-status', "GRA RUSZYŁA! Rzuć kartę.");
     });
 
     socket.on('play-card', (card) => {
-        const pIdx = players.findIndex(p => p.id === socket.id);
-        if (!gameStarted || players[pIdx].hasPlayed) return;
+        const p = players.find(pl => pl.id === socket.id);
+        if (!gameStarted || p.hasPlayed) return;
 
-        const player = players[pIdx];
-        const cardInHandIdx = player.hand.findIndex(c => c.value === card.value && c.suit === card.suit);
+        const cardIdx = p.hand.findIndex(c => c.value === card.value && c.suit === card.suit);
+        if (cardIdx === -1) return;
+
+        p.currentCombo.push(p.hand.splice(cardIdx, 1)[0]);
         
-        if (cardInHandIdx > -1) {
-            player.hand.splice(cardInHandIdx, 1);
-            player.hasPlayed = true;
+        // --- DYNAMICZNA LOGIKA KOMBOSÓW ---
+        let requiredCards = 1;
+        const hasEight = p.currentCombo.some(c => c.value === '8');
+        const hasTwo = p.currentCombo.some(c => c.value === '2');
+        const hasJoker = p.currentCombo.some(c => c.value === 'Joker');
 
-            const realValues = player.hand.map(c => cardValues[c.value] || 0);
-            const isBlef = cardValues[card.value] < Math.max(...realValues, 0);
+        if (hasEight) requiredCards++; // +1 karta za 8
+        if (hasTwo) requiredCards++;   // +1 karta za 2 (mnożnik)
+        if (hasJoker) requiredCards += 2; // +2 karty za Jokera
 
-            const move = { 
-                playerIdx: pIdx, 
-                playerName: player.name, 
-                card: card, 
-                wasBlef: isBlef,
-                power: calculatePower(card)
-            };
-            
-            tableCards.push(move);
-            lastMove = move;
-
-            io.emit('card-placed', { playerName: player.name });
-            io.to(player.id).emit('init-hand', player.hand);
-            
-            if (tableCards.length === players.length) {
-                io.emit('update-status', "Wszyscy rzucili! Możecie SPRAWDZAĆ lub czekamy na odsłonięcie...");
-                setTimeout(resolveRound, 4000); // 4 sekundy na reakcję blefu
+        // Poprawka: Jeśli masz i 8 i Jokera, musisz rzucić łącznie 4 karty (8, Joker, Karta, Karta)
+        // Jeśli masz 8 i 2, musisz rzucić 3 karty (8, 2, Karta)
+        
+        if (p.currentCombo.length < requiredCards) {
+            io.to(p.id).emit('init-hand', p.hand);
+            io.to(p.id).emit('update-status', `Combo w toku... Dołóż jeszcze ${requiredCards - p.currentCombo.length} kart(y).`);
+        } else {
+            if (hasEight) {
+                const targets = players.filter(pl => pl.id !== p.id).map(pl => pl.name);
+                io.to(p.id).emit('show-target-menu', targets);
+            } else {
+                finishTurn(p);
             }
         }
     });
 
-    function calculatePower(card) {
-        if (isFirstRound) return cardValues[card.value] || 0;
-        if (card.value === '2') return 18; // HEWI
-        if (card.value === 'Joker') return 25; // JOHNY
-        if (card.value === '8') return (card.suit === '♥' || card.suit === '♦') ? -8 : -4; // BOGUŚ
-        return cardValues[card.value] || 0;
+    socket.on('target-selected', (targetName) => {
+        const p = players.find(pl => pl.id === socket.id);
+        p.target = targetName;
+        finishTurn(p);
+    });
+
+    function finishTurn(p) {
+        p.hasPlayed = true;
+        tableCards.push({ 
+            playerIdx: players.indexOf(p), 
+            playerName: p.name, 
+            cards: [...p.currentCombo],
+            target: p.target 
+        });
+        io.emit('card-placed', { playerName: p.name });
+        io.to(p.id).emit('init-hand', p.hand);
+        if (tableCards.length === players.length) setTimeout(resolveRound, 2000);
     }
 
-    socket.on('check-blef', () => {
-        if (!lastMove || tableCards.length < players.length) return;
-        const checker = players.find(p => p.id === socket.id);
-        const attacker = players[lastMove.playerIdx];
-
-        if (lastMove.wasBlef) {
-            attacker.hand.push(...gameDeck.splice(0, 4));
-            io.emit('blef-result', { msg: `🔥 ZŁAPANY! ${attacker.name} brał udział w blefie. +4 karty!` });
+    function calculatePower(move) {
+        let power = 0;
+        const hasTwo = move.cards.some(c => c.value === '2');
+        const hasJoker = move.cards.some(c => c.value === 'Joker');
+        
+        // Karty bazowe (te, które dają punkty, a nie są funkcyjne)
+        const baseCards = move.cards.filter(c => c.value !== '8' && c.value !== '2' && c.value !== 'Joker');
+        
+        if (hasTwo && baseCards.length > 0) {
+            power = cardValues[baseCards[0].value] * 2;
+        } else if (hasJoker) {
+            power = baseCards.reduce((sum, c) => sum + cardValues[c.value], 0);
         } else {
-            checker.hand.push(...gameDeck.splice(0, 3));
-            io.emit('blef-result', { msg: `✅ CZYSTO! ${checker.name} dobiera 3 karne.` });
+            power = baseCards.length > 0 ? cardValues[baseCards[0].value] : 0;
         }
-        updateAllHands();
-    });
-
-    socket.on('sks-action', () => {
-        const p = players.find(p => p.id === socket.id);
-        if (!p || p.sksUsed || p.hand.length === 0) return;
-        p.sksUsed = true;
-        const sksCard = p.hand.splice(Math.floor(Math.random()*p.hand.length), 1)[0];
-        const move = tableCards.find(m => m.playerIdx === players.indexOf(p));
-        if (move) move.power += calculatePower(sksCard);
-        io.emit('update-status', `🧨 SKS! ${p.name} dorzucił kartę!`);
-        updateAllHands();
-    });
+        return power;
+    }
 
     function resolveRound() {
-        if (tableCards.length === 0) return;
-        io.emit('reveal-cards', tableCards);
+        let scores = tableCards.map(m => ({ playerIdx: m.playerIdx, power: calculatePower(m), m: m }));
 
-        let minPower = 100;
-        let loserIdx = -1;
-        let maxPower = -100;
-        let winnerIdx = -1;
-
+        // Atak Ósemek
         tableCards.forEach(m => {
-            if (m.power < minPower) { minPower = m.power; loserIdx = m.playerIdx; }
-            if (m.power > maxPower) { maxPower = m.power; winnerIdx = m.playerIdx; }
+            const eight = m.cards.find(c => c.value === '8');
+            if (eight && m.target) {
+                const penalty = (eight.suit === '♥' || eight.suit === '♦') ? 8 : 4;
+                const targetScore = scores.find(s => players[s.playerIdx].name === m.target);
+                if (targetScore) targetScore.power -= penalty;
+            }
         });
 
-        const cardsToTake = tableCards.map(m => m.card);
-        players[loserIdx].hand.push(...cardsToTake);
-        
-        io.emit('update-status', `Koniec starcia: ${players[loserIdx].name} zabiera stół!`);
+        io.emit('reveal-detailed', scores.map(s => ({ name: players[s.playerIdx].name, cards: s.m.cards, finalPower: s.power })));
+
+        // Buła i Przegrana
+        let maxP = Math.max(...scores.map(s => s.power));
+        let top = scores.filter(s => s.power === maxP);
+
+        if (top.length > 1) {
+            io.emit('update-status', "⚔️ BUŁA! Dobieranie...");
+            top.forEach(w => {
+                const extra = gameDeck.splice(0, 2);
+                w.power += extra.reduce((sum, c) => sum + cardValues[c.value], 0);
+                w.lastCardVal = cardValues[extra[1].value];
+            });
+            top.sort((a, b) => a.lastCardVal - b.lastCardVal);
+            let loser = top[0].playerIdx;
+            players[loser].hand.push(...tableCards.flatMap(m => m.cards));
+        } else {
+            let minP = Math.min(...scores.map(s => s.power));
+            let loserIdx = scores.find(s => s.power === minP).playerIdx;
+            players[loserIdx].hand.push(...tableCards.flatMap(m => m.cards));
+        }
 
         tableCards = [];
-        isFirstRound = false;
-        players.forEach(p => p.hasPlayed = false);
+        players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; });
         updateAllHands();
-        setTimeout(() => {
-            io.emit('clear-table');
-            io.emit('update-status', "Nowa runda - rzucajcie!");
-        }, 3000);
     }
 
     function updateAllHands() {
@@ -153,4 +164,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, '0.0.0.0', () => console.log('MACHNOWIAK 2.0 FINAL READY'));
+http.listen(PORT, '0.0.0.0', () => console.log('MACHNOWIAK 2.0 ULTIMATE READY'));
