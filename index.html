@@ -2,223 +2,130 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MACHNOWIAK 2.0 ULTIMATE</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root {
-            --bg: #0f0c29;
-            --panel: rgba(255, 255, 255, 0.1);
-            --accent: #3498db;
-            --gold: #f1c40f;
-            --danger: #e74c3c;
-        }
+        :root { --bg: #0f0c29; --accent: #3498db; --gold: #f1c40f; --danger: #e74c3c; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        #sidebar { width: 220px; background: rgba(0,0,0,0.6); border-right: 2px solid var(--accent); padding: 20px; display: flex; flex-direction: column; }
+        .player-card { background: rgba(255,255,255,0.05); padding: 10px; margin: 5px 0; border-radius: 8px; border-left: 4px solid transparent; }
+        .player-card.active { border-left-color: var(--gold); background: rgba(241, 196, 15, 0.1); }
 
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: linear-gradient(to bottom, #0f0c29, #302b63, #24243e); 
-            color: white; 
-            margin: 0; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            min-height: 100vh;
-        }
-
-        h1 { margin: 20px 0; text-shadow: 2px 2px 10px rgba(0,0,0,0.5); }
-
-        #game-container { width: 95%; max-width: 1200px; text-align: center; }
-
-        #deck-info { font-weight: bold; color: #bdc3c7; margin-bottom: 10px; }
-
-        #status { 
-            font-size: 1.2rem; 
-            color: var(--gold); 
-            background: rgba(0,0,0,0.3); 
-            padding: 10px 20px; 
-            border-radius: 50px; 
-            margin-bottom: 20px;
-            border: 1px solid var(--gold);
-        }
-
-        #stół { 
-            background: var(--panel); 
-            min-height: 250px; 
-            border-radius: 20px; 
-            border: 2px dashed var(--accent); 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            gap: 15px; 
-            margin-bottom: 30px;
-            padding: 20px;
-            flex-wrap: wrap;
-        }
+        #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 20px; overflow-y: auto; position: relative; }
+        #stół { background: rgba(255,255,255,0.03); width: 90%; min-height: 300px; border-radius: 30px; border: 2px dashed #444; display: flex; justify-content: center; align-items: center; gap: 40px; margin: 20px; }
 
         .karta { 
-            width: 80px; 
-            height: 120px; 
-            background: white; 
-            color: black; 
-            border-radius: 12px; 
-            display: inline-flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            font-weight: bold; 
-            font-size: 1.5rem; 
-            border: 3px solid #333; 
-            cursor: pointer; 
-            transition: transform 0.2s, box-shadow 0.2s;
-            user-select: none;
-            position: relative;
+            width: 90px; height: 130px; background: white; color: black; border-radius: 10px; 
+            border: 2px solid #222; position: relative; cursor: pointer; transition: 0.2s;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
         }
-
-        .karta:hover { transform: translateY(-10px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+        .karta .val-top { position: absolute; top: 5px; left: 8px; font-weight: 900; font-size: 1.2rem; }
+        .karta .suit-top { position: absolute; top: 22px; left: 8px; font-size: 0.9rem; }
         .karta.red { color: var(--danger); }
-        .karta.zakryta { background: linear-gradient(45deg, #2c3e50, #000); border-color: var(--accent); color: transparent; }
+        .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border-color: white; }
 
-        #reka { 
-            display: flex; 
-            justify-content: center; 
-            gap: 10px; 
-            flex-wrap: wrap; 
-            padding: 20px; 
-            background: rgba(255,255,255,0.05);
-            border-radius: 20px;
-        }
-
-        .controls { margin: 20px 0; }
+        .card-stack { position: relative; width: 90px; height: 130px; }
         
-        button { 
-            padding: 12px 30px; 
-            font-size: 1rem; 
-            font-weight: bold; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            transition: background 0.3s;
-            margin: 5px;
-        }
-
-        #start-btn { background: #27ae60; color: white; }
-        #start-btn:hover { background: #2ecc71; }
-
-        #target-menu { 
-            display: none; 
-            position: fixed; 
-            top: 50%; left: 50%; 
-            transform: translate(-50%, -50%); 
-            background: #2c3e50; 
-            padding: 30px; 
-            border: 4px solid var(--gold); 
-            z-index: 1000; 
-            border-radius: 20px; 
-            box-shadow: 0 0 50px rgba(0,0,0,0.8);
-        }
-
-        .target-btn { 
-            display: block; 
-            width: 200px; 
-            margin: 10px 0; 
-            padding: 15px; 
-            background: #e67e22; 
-            color: white; 
-            border: none; 
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .card-group { display: flex; flex-direction: column; align-items: center; }
-        .player-label { font-size: 0.9rem; margin-top: 5px; color: var(--accent); }
+        #pick-menu, #target-menu { display: none; position: fixed; top: 10%; background: #1a1a2e; border: 4px solid var(--gold); padding: 30px; border-radius: 20px; z-index: 1000; width: 80%; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        
+        button { padding: 12px 25px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; margin: 5px; }
+        .btn-start { background: #27ae60; color: white; }
+        .btn-blef { background: var(--danger); color: white; }
+        .btn-sks { background: var(--gold); }
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <h1>⚔️ MACHNOWIAK 2.0 ULTIMATE</h1>
+    <div id="sidebar">
+        <h2>👥 GRACZE</h2>
+        <div id="player-list"></div>
+    </div>
+
+    <div id="game-area">
+        <h1>⚔️ MACHNOWIAK 2.0</h1>
+        <div id="status" style="color:var(--gold); margin:10px;">Czekaj na start...</div>
         
-        <div id="deck-info">Karty w talii: <span id="deck-count">53</span></div>
-        <div id="status">Inicjalizacja... Połącz się z kolegą.</div>
-        
+        <div id="stół"></div>
+
         <div class="controls">
-            <button id="start-btn" onclick="socket.emit('start-game')">START GRY</button>
+            <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')">START GRY</button>
+            <button class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
+            <button class="btn-sks">SKS!</button>
         </div>
 
-        <div id="stół">
-            </div>
+        <div id="pick-menu">
+            <h2 id="pick-title">Nagroda! Wybierz 2 karty:</h2>
+            <div id="pick-cards-grid" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
+        </div>
 
         <div id="target-menu">
-            <h3>🎯 WYBIERZ OFIARĘ (BOGUŚ):</h3>
-            <div id="target-list"></div>
+            <h2>🎯 Wybierz ofiarę:</h2>
+            <div id="target-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
 
         <h3>TWOJA RĘKA:</h3>
-        <div id="reka"></div>
+        <div id="reka" style="display:flex; gap:10px; padding:20px; flex-wrap:wrap; justify-content:center;"></div>
     </div>
 
     <script>
         const socket = io();
-        let myNick = "";
+        let selectedForPick = [];
 
-        // Logowanie
         window.onload = () => {
-            myNick = prompt("Wpisz swój Nick:", "Gracz " + Math.floor(Math.random()*100));
-            socket.emit('join', myNick);
+            const nick = prompt("Twój Nick:");
+            if(nick) socket.emit('join', nick);
         };
 
-        // Aktualizacja stanu ręki
+        socket.on('update-player-list', list => {
+            document.getElementById('player-list').innerHTML = list.map(p => `
+                <div class="player-card ${p.isCurrent ? 'active' : ''}">
+                    <strong>${p.name}</strong><br>Karty: ${p.count}
+                </div>
+            `).join('');
+        });
+
         socket.on('init-hand', hand => {
-            const rekaDiv = document.getElementById('reka');
-            rekaDiv.innerHTML = '';
+            const reka = document.getElementById('reka');
+            reka.innerHTML = '';
             hand.forEach(k => {
-                const div = document.createElement('div');
-                const isRed = k.suit === '♥' || k.suit === '♦';
-                div.className = `karta ${isRed ? 'red' : ''}`;
-                div.innerHTML = `${k.value}${k.suit === 'Joker' ? '🃏' : k.suit}`;
+                const div = createCardElement(k);
                 div.onclick = () => socket.emit('play-card', k);
-                rekaDiv.appendChild(div);
+                reka.appendChild(div);
             });
-            // Aktualizacja licznika talii przy okazji
-            document.getElementById('deck-count').innerText = 53 - (hand.length); // Uproszczone
         });
 
-        // Ktoś rzucił kartę (zakryta)
-        socket.on('card-placed', data => {
-            const stol = document.getElementById('stół');
+        function createCardElement(k) {
             const div = document.createElement('div');
-            div.className = 'karta zakryta';
-            div.innerHTML = '?';
-            stol.appendChild(div);
-        });
+            const isRed = k.suit === '♥' || k.suit === '♦';
+            div.className = `karta ${isRed ? 'red' : ''}`;
+            div.innerHTML = `<span class="val-top">${k.value}</span><span class="suit-top">${k.value === 'Joker' ? '🃏' : k.suit}</span>`;
+            return div;
+        }
 
-        // Odkrycie kart po turze
-        socket.on('reveal-detailed', data => {
-            const stol = document.getElementById('stół');
-            stol.innerHTML = '';
-            data.forEach(p => {
-                const group = document.createElement('div');
-                group.className = 'card-group';
-                
-                const cardsContainer = document.createElement('div');
-                cardsContainer.style.display = 'flex';
-                cardsContainer.style.gap = '5px';
+        socket.on('show-pick-menu', data => {
+            const menu = document.getElementById('pick-menu');
+            const grid = document.getElementById('pick-cards-grid');
+            document.getElementById('pick-title').innerText = data.title;
+            menu.style.display = 'block';
+            grid.innerHTML = '';
+            selectedForPick = [];
 
-                p.cards.forEach(c => {
-                    const div = document.createElement('div');
-                    const isRed = c.suit === '♥' || c.suit === '♦';
-                    div.className = `karta ${isRed ? 'red' : ''}`;
-                    div.innerHTML = `${c.value}${c.suit === 'Joker' ? '🃏' : c.suit}`;
-                    cardsContainer.appendChild(div);
-                });
-
-                group.appendChild(cardsContainer);
-                group.innerHTML += `<div class="player-label">${p.name}: <b>${p.finalPower} pkt</b></div>`;
-                stol.appendChild(group);
+            data.pool.forEach(k => {
+                const div = createCardElement(k);
+                div.onclick = () => {
+                    if (div.style.transform === 'scale(1.1)') return; 
+                    div.style.transform = 'scale(1.1)';
+                    div.style.border = '3px solid gold';
+                    selectedForPick.push(k);
+                    if (selectedForPick.length === data.count) {
+                        socket.emit('pick-finished', { pickedCards: selectedForPick, targetIdx: data.targetIdx });
+                        menu.style.display = 'none';
+                    }
+                };
+                grid.appendChild(div);
             });
         });
 
-        // Menu wyboru ofiary (Ósemka)
         socket.on('show-target-menu', targets => {
             const menu = document.getElementById('target-menu');
             const list = document.getElementById('target-list');
@@ -226,7 +133,7 @@
             list.innerHTML = '';
             targets.forEach(t => {
                 const btn = document.createElement('button');
-                btn.className = 'target-btn';
+                btn.className = 'btn-sks';
                 btn.innerText = t;
                 btn.onclick = () => {
                     socket.emit('target-selected', t);
@@ -236,17 +143,34 @@
             });
         });
 
-        socket.on('update-status', msg => {
-            document.getElementById('status').innerText = msg;
+        socket.on('reveal-detailed', data => {
+            const stol = document.getElementById('stół');
+            stol.innerHTML = '';
+            data.forEach(p => {
+                const stack = document.createElement('div');
+                stack.className = 'card-stack';
+                p.cards.forEach((c, i) => {
+                    const cardDiv = createCardElement(c);
+                    cardDiv.style.position = 'absolute';
+                    cardDiv.style.top = (i * 25) + 'px';
+                    cardDiv.style.left = (i * 5) + 'px';
+                    stack.appendChild(cardDiv);
+                });
+                stack.innerHTML += `<div style="position:absolute; bottom:-40px; width:100%; text-align:center; font-size:0.8rem">${p.name}<br><b>${p.finalPower} pkt</b></div>`;
+                stol.appendChild(stack);
+            });
         });
 
-        socket.on('game-begun', () => {
-            document.getElementById('start-btn').style.display = 'none';
+        socket.on('update-status', msg => document.getElementById('status').innerText = msg);
+        
+        socket.on('card-placed', () => {
+            const stol = document.getElementById('stół');
+            const card = document.createElement('div');
+            card.className = 'karta zakryta';
+            stol.appendChild(card);
         });
 
-        socket.on('clear-table', () => {
-            document.getElementById('stół').innerHTML = '';
-        });
+        socket.on('game-begun', () => document.getElementById('start-btn').style.display = 'none');
     </script>
 </body>
 </html>
