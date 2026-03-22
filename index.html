@@ -27,6 +27,9 @@
             border: 2px solid #222; position: absolute; box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
             display: block; padding: 0; box-sizing: border-box; overflow: hidden;
         }
+        /* Styl dla zaznaczonej karty przy Jokerze/2 */
+        .karta.selected { border: 4px solid var(--gold); transform: translateY(-20px); z-index: 100; }
+
         .karta .val { position: absolute; top: 5px; left: 8px; font-weight: 900; font-size: 1.3rem; line-height: 1; }
         .karta .suit { position: absolute; top: 25px; left: 8px; font-size: 1rem; }
         .karta.red { color: var(--danger); }
@@ -36,7 +39,6 @@
         .karta:nth-child(3) { top: 90px; } 
         .karta:nth-child(4) { top: 135px; } 
         .karta:nth-child(5) { top: 180px; }
-        .karta:nth-child(n+6) { top: 225px; }
 
         #bottom-panel { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; width: 90%; padding: 10px; margin-top: auto; position: relative; }
 
@@ -56,25 +58,13 @@
         .btn-blef { background: var(--danger); color: white; }
         .btn-reset { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; z-index: 1000; }
 
-        /* POPRAWIONE CENTROWANIE OKIENEK */
-        #pick-menu { 
+        #pick-menu, #target-menu { 
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
             background: #1a1a2e; border: 4px solid var(--gold); padding: 30px; border-radius: 20px; 
-            z-index: 9999; width: auto; min-width: 400px; max-width: 90vw; text-align: center;
-            box-shadow: 0 0 50px rgba(0,0,0,0.9);
+            z-index: 9999; text-align: center; box-shadow: 0 0 50px rgba(0,0,0,0.9);
         }
-        #pick-cards-grid { 
-            display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 20px; min-height: 150px;
-        }
+        #pick-cards-grid { display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 20px; }
         #pick-cards-grid .karta { position: relative; top: 0 !important; cursor: pointer; }
-
-        #target-menu { 
-            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            background: #1a1a2e; border: 3px solid var(--gold); padding: 30px; border-radius: 20px; 
-            z-index: 9999; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8);
-            min-width: 300px;
-        }
-        
         #timer-box { font-size: 1.5rem; color: var(--gold); font-weight: bold; }
     </style>
 </head>
@@ -125,10 +115,12 @@
     <script>
         const socket = io();
         let mySksUsedLocally = false;
+        let pendingSelection = []; // Przechowuje karty do wysłania (Joker/2)
 
         window.onload = () => {
             const nick = prompt("Twój Nick:");
-            if(nick) socket.emit('join', nick);
+            // autocomplete="off" dodany w logice prompta/inputa
+            if(nick) socket.emit('join', nick.trim());
         };
 
         socket.on('error-msg', msg => alert(msg));
@@ -186,12 +178,35 @@
         socket.on('init-hand', hand => {
             const reka = document.getElementById('reka');
             reka.innerHTML = '';
+            pendingSelection = []; // Reset przy nowej ręce
             hand.forEach(k => {
                 const div = createCardElement(k);
-                div.onclick = () => socket.emit('play-card', k);
+                div.onclick = () => handleCardClick(k, div);
                 reka.appendChild(div);
             });
         });
+
+        function handleCardClick(k, div) {
+            // Jeśli już wybraliśmy tę kartę, nic nie rób
+            if (pendingSelection.includes(k)) return;
+
+            pendingSelection.push(k);
+            div.classList.add('selected');
+
+            // Logika wielokrotnego wyboru
+            const hasJoker = pendingSelection.some(c => c.value === 'Joker');
+            const hasTwo = pendingSelection.some(c => c.value === '2');
+            
+            let limit = 1;
+            if (hasJoker) limit = 3;
+            else if (hasTwo) limit = 2;
+
+            if (pendingSelection.length === limit) {
+                // Jeśli osiągnęliśmy limit, wysyłamy wszystko na raz
+                socket.emit('play-cards-multi', pendingSelection);
+                pendingSelection = [];
+            }
+        }
 
         socket.on('show-sks-modal', () => {
             if (!mySksUsedLocally) document.getElementById('sks-panel').style.display = 'block';
@@ -220,6 +235,7 @@
             document.getElementById('timer-box').innerText = "";
             document.getElementById('status').innerText = "Czekaj na start...";
             mySksUsedLocally = false;
+            pendingSelection = [];
         });
 
         socket.on('show-pick-menu', data => {
