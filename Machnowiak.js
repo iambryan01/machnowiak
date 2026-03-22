@@ -16,6 +16,7 @@ let lastPlayerIdx = -1;
 let lastMoveWasBlef = false;
 let canCheckBlef = false; 
 let sksResponses = 0;
+let roundTimer = null;
 
 function createDeck() {
     const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -36,8 +37,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('start-game', () => resetGame());
+    
     socket.on('new-game-request', () => {
         gameStarted = false;
+        tableCards = [];
+        sksResponses = 0;
+        if(roundTimer) clearInterval(roundTimer);
+        players.forEach(p => { p.hand = []; p.hasPlayed = false; p.sksUsed = false; });
         io.emit('reset-client-ui');
         updatePlayerList();
     });
@@ -90,21 +96,32 @@ io.on('connection', (socket) => {
     });
 
     socket.on('check-blef', () => {
-        if (!canCheckBlef) return;
         const checkerIdx = players.findIndex(p => p.id === socket.id);
-        if (checkerIdx !== (lastPlayerIdx + 1) % players.length) return;
+        // Punkt 2: Walidacja czy można sprawdzić
+        if (!canCheckBlef || checkerIdx !== (lastPlayerIdx + 1) % players.length) {
+            socket.emit('error-msg', "Możesz sprawdzić blef tylko przed dodaniem swojej karty!");
+            return;
+        }
+
         canCheckBlef = false;
         const attacker = players[lastPlayerIdx];
-        const oldHandCount = attacker.hand.length;
-        gameDeck.push(...attacker.hand);
-        if (!lastMoveWasBlef) {
-            attacker.hand = gameDeck.splice(0, Math.max(0, oldHandCount - 2));
-            const pool = gameDeck.splice(0, 10).filter(c => c.value !== 'Joker');
-            io.to(attacker.id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: "PRAWDA! Wybierz nagrodę:" });
-        } else {
-            attacker.hand = gameDeck.splice(0, oldHandCount + 2);
+        const checker = players[checkerIdx];
+        
+        if (lastMoveWasBlef) {
+            // ZŁAPANY: Atakujący traci wszystko, dostaje losowe (stare - 2) + 4 karne + 2 wybrane przez sprawdzającego
+            io.emit('update-status', `🚨 ${checker.name} przyłapał ${attacker.name} na kłamstwie!`);
+            const oldHandCount = attacker.hand.length;
+            attacker.hand = gameDeck.splice(0, Math.max(0, oldHandCount - 2) + 4);
             const pool = gameDeck.splice(0, 10);
-            io.to(players[checkerIdx].id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: "ZŁAPANY! Wybierz mu karty:" });
+            io.to(checker.id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: `Wybierz 2 karty dla gracza ${attacker.name}:` });
+        } else {
+            // NIE BLEFOWAŁ: Sprawdzający dostaje 3 karne, Sprawdzany dostaje (stare - 2) i wybiera 2
+            io.emit('update-status', `✅ ${attacker.name} mówił prawdę! ${checker.name} dostaje 3 karty.`);
+            checker.hand.push(...gameDeck.splice(0, 3));
+            const oldHandCount = attacker.hand.length;
+            attacker.hand = gameDeck.splice(0, Math.max(0, oldHandCount - 2));
+            const pool = gameDeck.splice(0, 10);
+            io.to(attacker.id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: `Wybierz dla siebie 2 karty:` });
         }
         updatePlayerList();
     });
@@ -118,10 +135,8 @@ io.on('connection', (socket) => {
             p.sksUsed = true;
             const sksCard = gameDeck.shift();
             const tableMove = tableCards.find(m => m.playerIdx === pIdx);
-
             if (sksCard.value === 'Joker') {
                 p.hand.push(sksCard);
-                io.to(p.id).emit('init-hand', p.hand);
                 io.emit('update-status', `${p.name} SKS: Joker do ręki!`);
             } else if (tableMove) {
                 tableMove.cards.push(sksCard);
@@ -132,9 +147,22 @@ io.on('connection', (socket) => {
 
         if (sksResponses >= players.length) {
             sksResponses = 0;
-            setTimeout(cleanTable, 2000);
+            startRoundCountdown();
         }
     });
+
+    function startRoundCountdown() {
+        let timeLeft = 15;
+        if(roundTimer) clearInterval(roundTimer);
+        roundTimer = setInterval(() => {
+            io.emit('update-timer', timeLeft);
+            if (timeLeft <= 0) {
+                clearInterval(roundTimer);
+                cleanTable();
+            }
+            timeLeft--;
+        }, 1000);
+    }
 
     socket.on('pick-finished', (data) => {
         players[data.targetIdx].hand.push(...data.pickedCards);
@@ -194,22 +222,29 @@ io.on('connection', (socket) => {
             let top = results.filter(r => r.power === maxP);
 
             if (top.length > 1) {
+                // Punkt 1: Buła - niższy offset kart i rozstrzygnięcie
                 top.forEach(t => {
                     let extras = gameDeck.splice(0, 2);
                     extras.forEach(c => {
                         if (c.value === 'Joker') {
                             players[t.playerIdx].hand.push(c);
-                            io.to(players[t.playerIdx].id).emit('init-hand', players[t.playerIdx].hand);
                         } else { t.m.cards.push(c); }
                     });
                 });
                 io.emit('update-status', "⚔️ BUŁA!");
-                setTimeout(() => resolveRound(true), 2000);
+                setTimeout(() => resolveRound(false), 2000); // Ponowne rozstrzygnięcie
             } else {
                 let minP = Math.min(...results.map(r => r.power));
                 let loser = results.find(r => r.power === minP);
-                players[loser.playerIdx].hand.push(...tableCards.flatMap(m => m.cards));
-                io.emit('update-status', `${loser.playerName} zabiera karty!`);
+                // Rozstrzygnięcie po bule: loser bierze 4 karne, reszta na spód talii
+                if (tableCards.some(m => m.cards.length > 5)) { // Jeśli była buła
+                    players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
+                    gameDeck.push(...tableCards.flatMap(m => m.cards));
+                    io.emit('update-status', `PO BULI: ${loser.playerName} dostaje 4 karne!`);
+                } else {
+                    players[loser.playerIdx].hand.push(...tableCards.flatMap(m => m.cards));
+                    io.emit('update-status', `${loser.playerName} zabiera karty!`);
+                }
                 io.emit('show-sks-modal'); 
             }
         }
