@@ -1,80 +1,18 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>MACHNOWIAK 2.0</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <style>
-        body { font-family: sans-serif; background: #1a1a2e; color: #fff; text-align: center; margin: 0; }
-        #stół { background: #16213e; min-height: 180px; margin: 20px auto; display: flex; justify-content: center; align-items: center; gap: 10px; border-radius: 15px; width: 90%; border: 2px solid #00d2ff; }
-        .karta { width: 80px; height: 115px; background: white; color: black; border-radius: 10px; display: inline-flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold; font-size: 1.4em; cursor: pointer; border: 2px solid #000; position: relative; }
-        .zakryta { background: #0f3460; color: #00d2ff; border: 2px solid #00d2ff; }
-        .red { color: #e94560; }
-        .owner { font-size: 10px; position: absolute; bottom: 5px; width: 100%; color: #777; }
-        #reka { display: flex; justify-content: center; gap: 10px; margin-top: 20px; flex-wrap: wrap; padding: 20px; }
-        #status { font-size: 1.3em; color: #f1c40f; margin: 15px; }
-        .controls { margin: 20px; }
-        button { padding: 12px 25px; font-weight: bold; cursor: pointer; border-radius: 5px; border: none; margin: 5px; text-transform: uppercase; }
-        #start-btn { background: #27ae60; color: white; }
-        .btn-check { background: #e94560; color: white; }
-        .btn-sks { background: #f1c40f; color: #1a1a2e; }
-    </style>
-</head>
 <body>
-    <h1>🎴 MACHNOWIAK 2.0</h1>
-    <div id="status">Połączono. Czekaj na start...</div>
-    
-    <div id="stół"></div>
-
-    <div class="controls">
-        <button id="start-btn" onclick="socket.emit('start-game')">START GRY</button>
-        <button class="btn-check" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
-        <button class="btn-sks" onclick="socket.emit('sks-action')">SKS!</button>
-    </div>
-
-    <h3>TWOJE KARTY:</h3>
-    <div id="reka"></div>
-
+    <h1>⚔️ MACHNOWIAK 2.0 ULTIMATE</h1>
+    <div id="deck-info" style="color: #7f8c8d;">Karty w talii: <span id="deck-count">53</span></div>
+    <div id="status">Czekaj na start...</div>
     <script>
-        const socket = io();
-        const nick = prompt("Twój Nick:");
-        socket.emit('join', nick);
-
+        // ... (kod socketów) ...
+        socket.on('update-players', list => {
+            // Możesz tu też zaktualizować licznik talii jeśli chcesz, 
+            // ale serwer wyśle init-hand przy każdej zmianie
+        });
+        
+        // Dodaj to do socket.on('init-hand'):
         socket.on('init-hand', hand => {
-            const reka = document.getElementById('reka');
-            reka.innerHTML = '';
-            hand.forEach(k => {
-                const div = document.createElement('div');
-                div.className = `karta ${(k.suit === '♥' || k.suit === '♦') ? 'red' : ''}`;
-                div.innerHTML = `${k.value}${k.suit === 'Joker' ? '🃏' : k.suit}`;
-                div.onclick = () => socket.emit('play-card', k);
-                reka.appendChild(div);
-            });
+            // ... (rysowanie ręki) ...
+            // Opcjonalnie: serwer może wysyłać deck.length w osobnym evencie
         });
-
-        socket.on('card-placed', data => {
-            const stol = document.getElementById('stół');
-            const div = document.createElement('div');
-            div.className = 'karta zakryta';
-            div.innerHTML = `?<div class="owner">${data.playerName}</div>`;
-            stol.appendChild(div);
-        });
-
-        socket.on('reveal-cards', cards => {
-            const stol = document.getElementById('stół');
-            stol.innerHTML = '';
-            cards.forEach(m => {
-                const div = document.createElement('div');
-                div.className = `karta ${(m.card.suit === '♥' || m.card.suit === '♦') ? 'red' : ''}`;
-                div.innerHTML = `${m.card.value}${m.card.suit === 'Joker' ? '🃏' : m.card.suit}<div class="owner">${m.playerName}</div>`;
-                stol.appendChild(div);
-            });
-        });
-
-        socket.on('update-status', msg => document.getElementById('status').innerText = msg);
-        socket.on('clear-table', () => document.getElementById('stół').innerHTML = '');
-        socket.on('game-begun', () => document.getElementById('start-btn').style.display = 'none');
-        socket.on('blef-result', data => alert(data.msg));
     </script>
 </body>
-</html>
