@@ -32,29 +32,10 @@ function createDeck() {
 }
 
 io.on('connection', (socket) => {
-    // --- LOGIKA DOŁĄCZANIA ---
     socket.on('join', (name) => {
         if (gameStarted) return;
         players.push({ id: socket.id, name, hand: [], hasPlayed: false, currentCombo: [], target: null, sksUsed: false });
         updatePlayerList();
-    });
-
-    // --- LOGIKA ROZŁĄCZANIA (NAPRAWA DUCHÓW) ---
-    socket.on('disconnect', () => {
-        const index = players.findIndex(p => p.id === socket.id);
-        if (index !== -1) {
-            const playerName = players[index].name;
-            players.splice(index, 1); // Usuwa gracza z pamięci serwera
-            
-            if (!gameStarted) {
-                updatePlayerList();
-            } else {
-                io.emit('update-status', `🏃 Gracz ${playerName} opuścił grę.`);
-                // Jeśli w trakcie gry wyjdzie gracz, którego była tura, resetujemy do początku listy
-                if (index === currentPlayerIdx) currentPlayerIdx = 0;
-                updatePlayerList();
-            }
-        }
     });
 
     socket.on('start-game', () => resetGame());
