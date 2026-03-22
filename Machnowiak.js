@@ -15,7 +15,7 @@ let tableCards = [];
 let lastPlayerIdx = -1;
 let lastMoveWasBlef = false;
 let canCheckBlef = false; 
-let sksResponses = 0; // Licznik decyzji SKS
+let sksResponses = 0;
 
 function createDeck() {
     const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -109,7 +109,6 @@ io.on('connection', (socket) => {
         updatePlayerList();
     });
 
-    // POPRAWIONA LOGIKA SKS
     socket.on('sks-decision', (decision) => {
         const pIdx = players.findIndex(p => p.id === socket.id);
         const p = players[pIdx];
@@ -128,7 +127,7 @@ io.on('connection', (socket) => {
                 tableMove.cards.push(sksCard);
                 io.emit('update-status', `${p.name} dołożył z SKS!`);
             }
-            resolveRound(true); // Odśwież widok stołu z nową kartą
+            resolveRound(true);
         }
 
         if (sksResponses >= players.length) {
@@ -209,7 +208,6 @@ io.on('connection', (socket) => {
             } else {
                 let minP = Math.min(...results.map(r => r.power));
                 let loser = results.find(r => r.power === minP);
-                // PRZENIESIENIE KART DO RĘKI LOSERA
                 players[loser.playerIdx].hand.push(...tableCards.flatMap(m => m.cards));
                 io.emit('update-status', `${loser.playerName} zabiera karty!`);
                 io.emit('show-sks-modal'); 
