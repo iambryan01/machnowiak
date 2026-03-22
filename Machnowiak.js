@@ -42,36 +42,27 @@ io.on('connection', (socket) => {
             io.to(p.id).emit('init-hand', p.hand);
         });
         io.emit('game-begun');
-        io.emit('update-status', "GRA RUSZYŁA! Rzuć kartę.");
+        io.emit('update-status', "GRA RUSZYŁA!");
     });
 
     socket.on('play-card', (card) => {
         const p = players.find(pl => pl.id === socket.id);
         if (!gameStarted || p.hasPlayed) return;
-
         const cardIdx = p.hand.findIndex(c => c.value === card.value && c.suit === card.suit);
         if (cardIdx === -1) return;
 
         p.currentCombo.push(p.hand.splice(cardIdx, 1)[0]);
         
-        // --- DYNAMICZNA LOGIKA KOMBOSÓW ---
-        let requiredCards = 1;
-        const hasEight = p.currentCombo.some(c => c.value === '8');
-        const hasTwo = p.currentCombo.some(c => c.value === '2');
-        const hasJoker = p.currentCombo.some(c => c.value === 'Joker');
+        let req = 1;
+        if (p.currentCombo.some(c => c.value === '8')) req++;
+        if (p.currentCombo.some(c => c.value === '2')) req++;
+        if (p.currentCombo.some(c => c.value === 'Joker')) req += 2;
 
-        if (hasEight) requiredCards++; // +1 karta za 8
-        if (hasTwo) requiredCards++;   // +1 karta za 2 (mnożnik)
-        if (hasJoker) requiredCards += 2; // +2 karty za Jokera
-
-        // Poprawka: Jeśli masz i 8 i Jokera, musisz rzucić łącznie 4 karty (8, Joker, Karta, Karta)
-        // Jeśli masz 8 i 2, musisz rzucić 3 karty (8, 2, Karta)
-        
-        if (p.currentCombo.length < requiredCards) {
+        if (p.currentCombo.length < req) {
             io.to(p.id).emit('init-hand', p.hand);
-            io.to(p.id).emit('update-status', `Combo w toku... Dołóż jeszcze ${requiredCards - p.currentCombo.length} kart(y).`);
+            io.to(p.id).emit('update-status', `Combo... rzuć jeszcze ${req - p.currentCombo.length}`);
         } else {
-            if (hasEight) {
+            if (p.currentCombo.some(c => c.value === '8')) {
                 const targets = players.filter(pl => pl.id !== p.id).map(pl => pl.name);
                 io.to(p.id).emit('show-target-menu', targets);
             } else {
@@ -80,76 +71,115 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('target-selected', (targetName) => {
+    socket.on('target-selected', (t) => {
         const p = players.find(pl => pl.id === socket.id);
-        p.target = targetName;
+        p.target = t;
         finishTurn(p);
     });
 
     function finishTurn(p) {
         p.hasPlayed = true;
-        tableCards.push({ 
-            playerIdx: players.indexOf(p), 
-            playerName: p.name, 
-            cards: [...p.currentCombo],
-            target: p.target 
-        });
+        tableCards.push({ playerIdx: players.indexOf(p), playerName: p.name, cards: [...p.currentCombo], target: p.target });
         io.emit('card-placed', { playerName: p.name });
         io.to(p.id).emit('init-hand', p.hand);
         if (tableCards.length === players.length) setTimeout(resolveRound, 2000);
     }
 
-    function calculatePower(move) {
-        let power = 0;
-        const hasTwo = move.cards.some(c => c.value === '2');
-        const hasJoker = move.cards.some(c => c.value === 'Joker');
-        
-        // Karty bazowe (te, które dają punkty, a nie są funkcyjne)
-        const baseCards = move.cards.filter(c => c.value !== '8' && c.value !== '2' && c.value !== 'Joker');
-        
-        if (hasTwo && baseCards.length > 0) {
-            power = cardValues[baseCards[0].value] * 2;
-        } else if (hasJoker) {
-            power = baseCards.reduce((sum, c) => sum + cardValues[c.value], 0);
-        } else {
-            power = baseCards.length > 0 ? cardValues[baseCards[0].value] : 0;
-        }
-        return power;
+    function calculatePower(cards) {
+        let pwr = 0;
+        const base = cards.filter(c => c.value !== '8' && c.value !== '2' && c.value !== 'Joker');
+        if (cards.some(c => c.value === '2')) pwr = base.length > 0 ? cardValues[base[0].value] * 2 : 4;
+        else if (cards.some(c => c.value === 'Joker')) pwr = base.reduce((s, c) => s + cardValues[c.value], 0);
+        else pwr = base.reduce((s, c) => s + cardValues[c.value], 0);
+        return pwr;
     }
 
     function resolveRound() {
-        let scores = tableCards.map(m => ({ playerIdx: m.playerIdx, power: calculatePower(m), m: m }));
+        let results = tableCards.map(m => ({ 
+            playerIdx: m.playerIdx, 
+            playerName: m.playerName,
+            power: calculatePower(m.cards), 
+            m: m 
+        }));
 
-        // Atak Ósemek
+        // Ósemki z ręki
         tableCards.forEach(m => {
             const eight = m.cards.find(c => c.value === '8');
             if (eight && m.target) {
                 const penalty = (eight.suit === '♥' || eight.suit === '♦') ? 8 : 4;
-                const targetScore = scores.find(s => players[s.playerIdx].name === m.target);
-                if (targetScore) targetScore.power -= penalty;
+                const target = results.find(r => r.playerName === m.target);
+                if (target) target.power -= penalty;
             }
         });
 
-        io.emit('reveal-detailed', scores.map(s => ({ name: players[s.playerIdx].name, cards: s.m.cards, finalPower: s.power })));
+        io.emit('reveal-detailed', results.map(r => ({ name: r.playerName, cards: r.m.cards, finalPower: r.power })));
 
-        // Buła i Przegrana
-        let maxP = Math.max(...scores.map(s => s.power));
-        let top = scores.filter(s => s.power === maxP);
+        let maxP = Math.max(...results.map(r => r.power));
+        let top = results.filter(r => r.power === maxP);
 
+        // --- LOGIKA BUŁY ---
         if (top.length > 1) {
-            io.emit('update-status', "⚔️ BUŁA! Dobieranie...");
-            top.forEach(w => {
-                const extra = gameDeck.splice(0, 2);
-                w.power += extra.reduce((sum, c) => sum + cardValues[c.value], 0);
-                w.lastCardVal = cardValues[extra[1].value];
-            });
-            top.sort((a, b) => a.lastCardVal - b.lastCardVal);
-            let loser = top[0].playerIdx;
-            players[loser].hand.push(...tableCards.flatMap(m => m.cards));
+            io.emit('update-status', "⚔️ BUŁA! Rozpoczynam dogrywkę...");
+            let inBula = top.map(t => ({ ...t, totalBulaPower: t.power }));
+            let winnerFound = false;
+
+            while (!winnerFound) {
+                inBula.forEach(playerBula => {
+                    let extra = gameDeck.splice(0, 2);
+                    let roundPower = 0;
+                    
+                    // Joker w bule do ręki
+                    extra.forEach((c, idx) => {
+                        if (c.value === 'Joker') {
+                            players[playerBula.playerIdx].hand.push(c);
+                            extra.splice(idx, 1);
+                            io.to(players[playerBula.playerIdx].id).emit('init-hand', players[playerBula.playerIdx].hand);
+                        }
+                    });
+
+                    // Siła z doboru (2 podwaja drugą)
+                    if (extra.length === 2) {
+                        if (extra[0].value === '2' || extra[1].value === '2') {
+                            let other = extra.find(c => c.value !== '2') || {value: '2'};
+                            roundPower = cardValues[other.value] * 2;
+                        } else {
+                            roundPower = cardValues[extra[0].value] + cardValues[extra[1].value];
+                        }
+                    } else if (extra.length === 1) {
+                        roundPower = cardValues[extra[0].value];
+                    }
+
+                    // Ósemki w bule (odejmują innym w bule)
+                    extra.forEach(c => {
+                        if (c.value === '8') {
+                            let penalty = (c.suit === '♥' || c.suit === '♦') ? 8 : 4;
+                            inBula.forEach(other => { if (other !== playerBula) other.totalBulaPower -= penalty; });
+                        }
+                    });
+
+                    playerBula.totalBulaPower += roundPower;
+                    playerBula.lastCard = extra[extra.length - 1];
+                });
+
+                let bulaMax = Math.max(...inBula.map(p => p.totalBulaPower));
+                let bulaWinners = inBula.filter(p => p.totalBulaPower === bulaMax);
+
+                if (bulaWinners.length === 1) {
+                    winnerFound = true;
+                    // Przegrany to ten z najniższym wynikiem po bule
+                    let bulaMin = Math.min(...inBula.map(p => p.totalBulaPower));
+                    let loser = inBula.find(p => p.totalBulaPower === bulaMin);
+                    players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
+                    gameDeck.push(...tableCards.flatMap(m => m.cards));
+                    io.emit('update-status', `Bułę przegrywa ${loser.playerName}! (+4 karne)`);
+                } 
+                // Jeśli nadal remis, pętla while leci dalej (kolejne 2 karty)
+            }
         } else {
-            let minP = Math.min(...scores.map(s => s.power));
-            let loserIdx = scores.find(s => s.power === minP).playerIdx;
+            let minP = Math.min(...results.map(r => r.power));
+            let loserIdx = results.find(r => r.power === minP).playerIdx;
             players[loserIdx].hand.push(...tableCards.flatMap(m => m.cards));
+            io.emit('update-status', `${players[loserIdx].name} zabiera stół.`);
         }
 
         tableCards = [];
@@ -164,4 +194,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, '0.0.0.0', () => console.log('MACHNOWIAK 2.0 ULTIMATE READY'));
+http.listen(PORT, '0.0.0.0', () => console.log('MACHNOWIAK 2.0 - FULL RULES'));
