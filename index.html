@@ -15,7 +15,7 @@
         #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 20px; position: relative; }
         
         #stół { 
-            background: rgba(255,255,255,0.03); width: 95%; height: 450px; border-radius: 30px; 
+            background: rgba(255,255,255,0.03); width: 95%; height: 420px; border-radius: 30px; 
             border: 2px dashed #444; display: flex; justify-content: center; align-items: flex-start; 
             gap: 60px; padding-top: 80px; position: relative;
         }
@@ -33,24 +33,30 @@
         .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border: 1px solid white; }
 
         /* Stosowanie kart */
-        .karta:nth-child(2) { top: 35px; } .karta:nth-child(3) { top: 70px; } 
-        .karta:nth-child(4) { top: 105px; } .karta:nth-child(5) { top: 140px; }
+        .karta:nth-child(2) { top: 30px; } .karta:nth-child(3) { top: 60px; } 
+        .karta:nth-child(4) { top: 90px; } .karta:nth-child(5) { top: 120px; }
 
-        #sks-modal { 
-            display: none; position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); 
-            background: #1a1a2e; border: 4px solid var(--gold); padding: 20px; border-radius: 20px; 
-            z-index: 5000; text-align: center; box-shadow: 0 0 50px black;
+        /* NOWA SEKCJA DOLNA */
+        #bottom-panel { display: flex; align-items: center; justify-content: center; gap: 20px; width: 100%; padding: 10px; margin-top: auto; }
+
+        #sks-panel { 
+            display: none; background: rgba(241, 196, 15, 0.15); border: 2px solid var(--gold); 
+            padding: 15px; border-radius: 15px; text-align: center; min-width: 150px;
         }
+        #sks-panel h3 { margin: 0 0 10px 0; font-size: 0.9rem; color: var(--gold); }
+        #sks-panel p { margin: 0 0 10px 0; font-size: 0.7rem; opacity: 0.8; }
 
-        .controls { margin-top: 20px; display: flex; gap: 10px; }
-        button { padding: 12px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; }
+        #reka-container { flex-grow: 1; text-align: center; }
+        #reka { display: flex; gap: 10px; padding: 10px; flex-wrap: wrap; justify-content: center; min-height: 140px; }
+        #reka .karta { position: relative; cursor: pointer; transition: 0.2s; top: 0 !important; }
+
+        .controls { position: absolute; bottom: 200px; display: flex; gap: 10px; }
+        button { padding: 10px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-start { background: #27ae60; color: white; }
         .btn-blef { background: var(--danger); color: white; }
+        .btn-sks-yes { background: var(--gold); color: black; padding: 8px 15px; }
+        .btn-sks-no { background: #555; color: white; padding: 8px 15px; }
         .btn-reset { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; }
-
-        #reka { display: flex; gap: 10px; padding: 20px; flex-wrap: wrap; justify-content: center; width: 100%; min-height: 150px; }
-        #reka .karta { position: relative; cursor: pointer; transition: 0.2s; top: 0 !important; }
-        #reka .karta:hover { transform: translateY(-10px); }
 
         #pick-menu, #target-menu { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; border: 3px solid var(--gold); padding: 20px; border-radius: 15px; z-index: 6000; }
     </style>
@@ -73,10 +79,18 @@
             <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
         </div>
 
-        <div id="sks-modal">
-            <h3>🔥 SKS?</h3>
-            <button class="btn-start" onclick="confirmSKS(true)">TAK</button>
-            <button class="btn-blef" onclick="confirmSKS(false)">NIE</button>
+        <div id="bottom-panel">
+            <div id="sks-panel">
+                <h3>🔥 UŻYĆ SKS?</h3>
+                <p>(Możliwe raz na całą grę)</p>
+                <button class="btn-sks-yes" onclick="sendSks(true)">TAK</button>
+                <button class="btn-sks-no" onclick="sendSks(false)">NIE</button>
+            </div>
+
+            <div id="reka-container">
+                <h3>TWOJA RĘKA:</h3>
+                <div id="reka"></div>
+            </div>
         </div>
 
         <div id="pick-menu">
@@ -88,21 +102,16 @@
             <h3>🎯 Wybierz cel:</h3>
             <div id="target-list" style="display:flex; flex-direction:column; gap:5px;"></div>
         </div>
-
-        <h3>TWOJA RĘKA:</h3>
-        <div id="reka"></div>
     </div>
 
     <script>
         const socket = io();
-        let myId = null;
+        let mySksUsedLocally = false;
 
         window.onload = () => {
             const nick = prompt("Twój Nick:");
             if(nick) socket.emit('join', nick);
         };
-
-        socket.on('connect', () => myId = socket.id);
 
         socket.on('update-player-list', list => {
             document.getElementById('player-list').innerHTML = list.map(p => `
@@ -112,7 +121,6 @@
             `).join('');
         });
 
-        // Punkt 5: Gracze widzą tylko swoje karty na stole
         socket.on('update-table-hidden', data => {
             const stol = document.getElementById('stół');
             stol.innerHTML = '';
@@ -120,8 +128,6 @@
                 const stack = document.createElement('div');
                 stack.className = 'card-stack';
                 stack.innerHTML = `<div class="stack-info">${p.playerName}</div>`;
-                
-                // Jeśli karty są null, znaczy że to nie nasze - pokazujemy rewers
                 if (p.cards === null) {
                     const rev = document.createElement('div');
                     rev.className = 'karta zakryta';
@@ -163,19 +169,27 @@
             });
         });
 
-        socket.on('show-sks-modal', () => document.getElementById('sks-modal').style.display = 'block');
-        function confirmSKS(v) { if(v) socket.emit('use-sks'); document.getElementById('sks-modal').style.display = 'none'; }
+        socket.on('show-sks-modal', () => {
+            if (!mySksUsedLocally) document.getElementById('sks-panel').style.display = 'block';
+            else socket.emit('sks-decision', false); // Jeśli zużyty, automatycznie wysyła NIE
+        });
+
+        function sendSks(v) {
+            if(v) mySksUsedLocally = true;
+            socket.emit('sks-decision', v);
+            document.getElementById('sks-panel').style.display = 'none';
+        }
 
         socket.on('update-status', msg => document.getElementById('status').innerText = msg);
         socket.on('clear-table', () => document.getElementById('stół').innerHTML = '');
         
-        // Punkt 4: Zarządzanie przyciskiem Start
         socket.on('game-begun', () => document.getElementById('start-btn').style.display = 'none');
         socket.on('reset-client-ui', () => {
             document.getElementById('start-btn').style.display = 'block';
             document.getElementById('stół').innerHTML = '';
             document.getElementById('reka').innerHTML = '';
             document.getElementById('status').innerText = "Czekaj na start...";
+            mySksUsedLocally = false;
         });
 
         socket.on('show-pick-menu', data => {
