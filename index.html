@@ -5,72 +5,60 @@
     <title>MACHNOWIAK ONLINE 2.0</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eaeaea; text-align: center; margin: 0; overflow-x: hidden; }
-        #game-board { padding: 20px; max-width: 1000px; margin: auto; }
-        #status { font-size: 1.4em; color: #00d2ff; margin: 15px 0; min-height: 1.5em; text-shadow: 0 0 10px rgba(0,210,255,0.5); }
-        #stół { background: rgba(255,255,255,0.05); border: 3px dashed #16213e; border-radius: 20px; min-height: 180px; display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 30px; padding: 15px; }
-        .karta { width: 85px; height: 125px; background: #fff; color: #000; border-radius: 12px; display: inline-flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold; font-size: 1.6em; cursor: pointer; border: 2px solid #333; transition: all 0.2s; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        .karta:hover { transform: translateY(-20px) scale(1.05); background: #f0f0f0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #fff; text-align: center; margin: 0; }
+        #game-board { padding: 20px; max-width: 900px; margin: auto; }
+        #status { font-size: 1.5em; color: #00d2ff; margin: 20px 0; min-height: 1.5em; }
+        #stół { background: rgba(255,255,255,0.05); border: 3px dashed #16213e; border-radius: 20px; min-height: 160px; display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 20px; padding: 15px; }
+        .karta { width: 80px; height: 115px; background: #fff; color: #000; border-radius: 10px; display: inline-flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold; font-size: 1.4em; cursor: pointer; border: 2px solid #333; position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .red { color: #e94560; }
-        .card-owner { font-size: 0.4em; position: absolute; bottom: 10px; color: #555; width: 100%; }
-        #reka { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
-        .btn-panel { margin-top: 30px; }
-        button { padding: 15px 35px; font-size: 1em; font-weight: bold; cursor: pointer; border: none; border-radius: 50px; text-transform: uppercase; transition: 0.3s; margin: 5px; }
-        #start-btn { background: #0f3460; color: white; border: 2px solid #00d2ff; }
-        #start-btn:hover { background: #00d2ff; color: #1a1a2e; }
-        .check-btn { background: #e94560; color: white; }
-        .check-btn:hover { background: #ff2e63; }
-        #players-list { position: fixed; left: 20px; top: 20px; background: rgba(22, 33, 62, 0.8); padding: 15px; border-radius: 10px; text-align: left; border-left: 4px solid #00d2ff; }
+        .owner { font-size: 0.5em; position: absolute; bottom: 5px; color: #777; width: 100%; }
+        #reka { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+        .controls { margin-top: 25px; display: flex; justify-content: center; gap: 10px; }
+        button { padding: 12px 25px; font-weight: bold; cursor: pointer; border-radius: 5px; border: none; text-transform: uppercase; }
+        #start-btn { background: #27ae60; color: white; }
+        .btn-check { background: #e94560; color: white; }
+        .btn-sks { background: #f1c40f; color: #1a1a2e; }
+        #p-list { position: fixed; left: 15px; top: 15px; background: rgba(22, 33, 62, 0.9); padding: 10px; border-radius: 8px; text-align: left; font-size: 0.9em; border: 1px solid #00d2ff; }
     </style>
 </head>
 <body>
-    <div id="players-list"><strong>EKIPA:</strong><div id="p-cont"></div></div>
+    <div id="p-list"><strong>GRACZE:</strong><div id="p-cont"></div></div>
     <div id="game-board">
         <h1>🎴 MACHNOWIAK 2.0</h1>
-        <div id="status">Wpisz nick i czekaj na start...</div>
-        
+        <div id="status">Wpisz nick...</div>
         <div id="stół"></div>
-        
         <div id="reka"></div>
-
-        <div class="btn-panel">
-            <button id="start-btn" onclick="socket.emit('start-game')">ROZPOCZNIJ WOJNĘ</button>
-            <button class="check-btn" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
+        <div class="controls">
+            <button id="start-btn" onclick="socket.emit('start-game')">START</button>
+            <button class="btn-check" onclick="socket.emit('check-blef')">BLEF!</button>
+            <button class="btn-sks" onclick="socket.emit('sks-action')">SKS!</button>
         </div>
     </div>
-
     <script>
         const socket = io();
-        const nick = prompt("Jak Cię wołają?", "Gracz" + Math.floor(Math.random()*99));
+        const nick = prompt("Twój nick:", "Gracz" + Math.floor(Math.random()*99));
         socket.emit('join', nick);
-
         socket.on('update-players', list => {
-            const cont = document.getElementById('p-cont');
-            cont.innerHTML = list.map(p => `<div>${p.name}: <strong>${p.cards}</strong></div>`).join('');
+            document.getElementById('p-cont').innerHTML = list.map(p => `<div>${p.name}: ${p.cards}</div>`).join('');
         });
-
         socket.on('init-hand', hand => {
             const reka = document.getElementById('reka');
             reka.innerHTML = '';
             hand.forEach(k => {
-                const cardEl = document.createElement('div');
-                const isRed = (k.suit === '♥' || k.suit === '♦');
-                cardEl.className = `karta ${isRed ? 'red' : ''}`;
-                cardEl.innerHTML = `${k.value}${k.suit === 'Joker' ? '🃏' : k.suit}`;
-                cardEl.onclick = () => socket.emit('play-card', k);
-                reka.appendChild(cardEl);
+                const el = document.createElement('div');
+                el.className = `karta ${(k.suit === '♥' || k.suit === '♦') ? 'red' : ''}`;
+                el.innerHTML = `${k.value}${k.suit === 'Joker' ? '🃏' : k.suit}`;
+                el.onclick = () => socket.emit('play-card', k);
+                reka.appendChild(el);
             });
         });
-
         socket.on('new-card-on-table', data => {
             const stol = document.getElementById('stół');
-            const cardEl = document.createElement('div');
-            const isRed = (data.card.suit === '♥' || data.card.suit === '♦');
-            cardEl.className = `karta ${isRed ? 'red' : ''}`;
-            cardEl.innerHTML = `${data.card.value}${data.card.suit === 'Joker' ? '🃏' : data.card.suit}<div class="card-owner">${data.playerName}</div>`;
-            stol.appendChild(cardEl);
+            const el = document.createElement('div');
+            el.className = `karta ${(data.card.suit === '♥' || data.card.suit === '♦') ? 'red' : ''}`;
+            el.innerHTML = `${data.card.value}${data.card.suit === 'Joker' ? '🃏' : data.card.suit}<div class="owner">${data.playerName}</div>`;
+            stol.appendChild(el);
         });
-
         socket.on('update-status', msg => document.getElementById('status').innerText = msg);
         socket.on('clear-table', () => document.getElementById('stół').innerHTML = '');
         socket.on('blef-result', data => alert(data.msg));
