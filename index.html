@@ -26,39 +26,49 @@
         .karta { 
             width: 90px; height: 130px; background: white; color: black; border-radius: 10px; 
             border: 2px solid #222; position: absolute; box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
-            display: flex; flex-direction: column; padding: 5px; box-sizing: border-box;
+            display: block; padding: 0; box-sizing: border-box; overflow: hidden;
         }
-        .karta .val { font-weight: 900; font-size: 1.3rem; }
+        /* POPRAWKA 1: SYMBOLE W LEWYM GÓRNYM ROGU */
+        .karta .val { position: absolute; top: 5px; left: 8px; font-weight: 900; font-size: 1.3rem; line-height: 1; }
+        .karta .suit { position: absolute; top: 25px; left: 8px; font-size: 1rem; }
         .karta.red { color: var(--danger); }
         .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border: 1px solid white; }
 
-        /* Stosowanie kart */
-        .karta:nth-child(2) { top: 30px; } .karta:nth-child(3) { top: 60px; } 
-        .karta:nth-child(4) { top: 90px; } .karta:nth-child(5) { top: 120px; }
+        /* POPRAWKA 2: KARTA SKS NIŻEJ (WIĘKSZY OFFSET) */
+        .karta:nth-child(2) { top: 35px; } 
+        .karta:nth-child(3) { top: 70px; } 
+        .karta:nth-child(4) { top: 105px; } 
+        .karta:nth-child(5) { top: 140px; }
+        .karta:nth-child(6) { top: 175px; } /* Dla SKS */
 
-        /* NOWA SEKCJA DOLNA */
-        #bottom-panel { display: flex; align-items: center; justify-content: center; gap: 20px; width: 100%; padding: 10px; margin-top: auto; }
+        /* PANEL DOLNY - NAPRAWA NAKŁADANIA */
+        #bottom-panel { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; width: 90%; padding: 10px; margin-top: auto; position: relative; }
 
+        /* POPRAWKA 3: WIĘKSZY I LEPIEJ POZYCJONOWANY SKS */
         #sks-panel { 
-            display: none; background: rgba(241, 196, 15, 0.15); border: 2px solid var(--gold); 
-            padding: 15px; border-radius: 15px; text-align: center; min-width: 150px;
+            display: none; background: rgba(0,0,0,0.7); border: 3px solid var(--gold); 
+            padding: 20px; border-radius: 15px; text-align: center; width: 200px;
+            box-shadow: 0 0 20px rgba(241, 196, 15, 0.4);
         }
-        #sks-panel h3 { margin: 0 0 10px 0; font-size: 0.9rem; color: var(--gold); }
-        #sks-panel p { margin: 0 0 10px 0; font-size: 0.7rem; opacity: 0.8; }
+        #sks-panel h3 { margin: 0 0 10px 0; font-size: 1.1rem; color: var(--gold); text-transform: uppercase; }
+        #sks-panel p { margin: 0 0 15px 0; font-size: 0.8rem; color: #ccc; }
 
         #reka-container { flex-grow: 1; text-align: center; }
-        #reka { display: flex; gap: 10px; padding: 10px; flex-wrap: wrap; justify-content: center; min-height: 140px; }
-        #reka .karta { position: relative; cursor: pointer; transition: 0.2s; top: 0 !important; }
+        #reka { display: flex; gap: 10px; padding: 10px; flex-wrap: wrap; justify-content: center; min-height: 150px; }
+        #reka .karta { position: relative; cursor: pointer; transition: 0.2s; top: 0 !important; flex-shrink: 0; }
+        #reka .karta:hover { transform: translateY(-15px); z-index: 100; }
 
-        .controls { position: absolute; bottom: 200px; display: flex; gap: 10px; }
-        button { padding: 10px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        /* PRZYCISKI GŁÓWNE */
+        .main-actions { position: absolute; top: -50px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; width: 100%; justify-content: center; }
+
+        button { padding: 12px 25px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .btn-start { background: #27ae60; color: white; }
         .btn-blef { background: var(--danger); color: white; }
-        .btn-sks-yes { background: var(--gold); color: black; padding: 8px 15px; }
-        .btn-sks-no { background: #555; color: white; padding: 8px 15px; }
-        .btn-reset { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; }
+        .btn-sks-yes { background: var(--gold); color: black; padding: 10px 25px; font-size: 1rem; }
+        .btn-sks-no { background: #444; color: white; padding: 10px 25px; }
+        .btn-reset { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; z-index: 1000; }
 
-        #pick-menu, #target-menu { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; border: 3px solid var(--gold); padding: 20px; border-radius: 15px; z-index: 6000; }
+        #pick-menu, #target-menu { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; border: 3px solid var(--gold); padding: 25px; border-radius: 15px; z-index: 6000; }
     </style>
 </head>
 <body>
@@ -74,21 +84,22 @@
         
         <div id="stół"></div>
 
-        <div class="controls">
-            <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')">START GRY</button>
-            <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
-        </div>
-
         <div id="bottom-panel">
             <div id="sks-panel">
                 <h3>🔥 UŻYĆ SKS?</h3>
-                <p>(Możliwe raz na całą grę)</p>
-                <button class="btn-sks-yes" onclick="sendSks(true)">TAK</button>
-                <button class="btn-sks-no" onclick="sendSks(false)">NIE</button>
+                <p>(Raz na całą grę)</p>
+                <div style="display:flex; gap:10px; justify-content:center;">
+                    <button class="btn-sks-yes" onclick="sendSks(true)">TAK</button>
+                    <button class="btn-sks-no" onclick="sendSks(false)">NIE</button>
+                </div>
             </div>
 
             <div id="reka-container">
-                <h3>TWOJA RĘKA:</h3>
+                <div class="main-actions">
+                    <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')">START GRY</button>
+                    <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
+                </div>
+                <h3 style="margin-bottom: 5px;">TWOJA RĘKA:</h3>
                 <div id="reka"></div>
             </div>
         </div>
@@ -155,7 +166,7 @@
             const div = document.createElement('div');
             const isRed = k.suit === '♥' || k.suit === '♦';
             div.className = `karta ${isRed ? 'red' : ''}`;
-            div.innerHTML = `<span class="val">${k.value}</span><span>${k.value === 'Joker' ? '🃏' : k.suit}</span>`;
+            div.innerHTML = `<span class="val">${k.value}</span><span class="suit">${k.value === 'Joker' ? '🃏' : k.suit}</span>`;
             return div;
         }
 
@@ -171,7 +182,7 @@
 
         socket.on('show-sks-modal', () => {
             if (!mySksUsedLocally) document.getElementById('sks-panel').style.display = 'block';
-            else socket.emit('sks-decision', false); // Jeśli zużyty, automatycznie wysyła NIE
+            else socket.emit('sks-decision', false);
         });
 
         function sendSks(v) {
