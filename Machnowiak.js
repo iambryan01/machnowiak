@@ -108,20 +108,36 @@ io.on('connection', (socket) => {
         canCheckBlef = false;
         const attacker = players[lastPlayerIdx];
         const checker = players[checkerIdx];
+        const pool = gameDeck.splice(0, 10);
         
         if (lastMoveWasBlef) {
             io.emit('update-status', `🚨 ${checker.name} przyłapał ${attacker.name} na kłamstwie!`);
-            const oldHandCount = attacker.hand.length;
-            attacker.hand = gameDeck.splice(0, Math.max(0, oldHandCount - 2) + 4);
-            const pool = gameDeck.splice(0, 10);
-            io.to(checker.id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: `Wybierz 2 karty dla gracza ${attacker.name}:` });
+            
+            let currentCount = attacker.hand.length;
+            // Kłamca wymienia rękę (tyle samo kart - 2 losowe) i dostaje 4 karne
+            attacker.hand = gameDeck.splice(0, Math.max(0, currentCount - 2) + 4);
+            
+            // Sprawdzający wybiera 2 karty dla kłamcy
+            io.to(checker.id).emit('show-pick-menu', { 
+                pool, count: 2, targetIdx: lastPlayerIdx, 
+                title: `WYBIERZ 2 ZŁOŚLIWE KARTY DLA ${attacker.name}:` 
+            });
         } else {
-            io.emit('update-status', `✅ ${attacker.name} mówił prawdę! ${checker.name} dostaje 3 karty.`);
-            checker.hand.push(...gameDeck.splice(0, 3));
-            const oldHandCount = attacker.hand.length;
-            attacker.hand = gameDeck.splice(0, Math.max(0, oldHandCount - 2));
-            const pool = gameDeck.splice(0, 10);
-            io.to(attacker.id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: `Wybierz dla siebie 2 karty:` });
+            io.emit('update-status', `✅ ${attacker.name} mówił prawdę! ${checker.name} dostaje 4 karne.`);
+            
+            // Sprawdzający dostaje 4 karne
+            checker.hand.push(...gameDeck.splice(0, 4));
+            io.to(checker.id).emit('init-hand', checker.hand);
+
+            let currentCount = attacker.hand.length;
+            // Oskarżony wymienia rękę (tyle samo kart - 2 losowe)
+            attacker.hand = gameDeck.splice(0, Math.max(0, currentCount - 2));
+            
+            // Oskarżony wybiera sobie sam 2 najlepsze karty
+            io.to(attacker.id).emit('show-pick-menu', { 
+                pool, count: 2, targetIdx: lastPlayerIdx, 
+                title: `WYBIERZ DLA SIEBIE 2 NAJLEPSZE KARTY:` 
+            });
         }
         updatePlayerList();
     });
@@ -201,7 +217,6 @@ io.on('connection', (socket) => {
         pwr = base.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
         if (cards.some(c => c.value === '2')) pwr *= 2;
         
-        // Losowe ósemki w Bułę biją właściciela
         cards.forEach(c => {
             if (c.value === '8') {
                 const penalty = (c.suit === '♥' || c.suit === '♦') ? 8 : 4;
@@ -223,7 +238,6 @@ io.on('connection', (socket) => {
         let top = results.filter(r => r.power === maxP);
         let loser = results.find(r => r.power === minP);
 
-        // Komunikaty SKS
         if (isSksUpdate && sksUser) {
             if (top.length > 1 && top.some(t => t.playerName === sksUser)) {
                 io.emit('update-status', `BUŁA! ${sksUser} wyrównał SKS-em!`);
@@ -248,18 +262,15 @@ io.on('connection', (socket) => {
             io.emit('update-status', "⚔️ BUŁA! Dogrywka...");
             setTimeout(() => resolveRound(false), 2000);
         } else if (!isSksUpdate) {
-            // FINAŁ RUNDY
             const allTableCards = tableCards.flatMap(m => m.cards);
             const validCards = allTableCards.filter(c => c.value !== 'Joker');
             const jokerDetected = allTableCards.length !== validCards.length;
 
             if (wasBulaInRound) {
-                // Nowa zasada: Przegrany (nawet ten spoza Buły) bierze 4 losowe karty, reszta na spód talii
                 players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
                 gameDeck.push(...validCards);
                 io.emit('update-status', `PO BULI: ${loser.playerName} miał najmniej i dostaje 4 karne! Karty ze stołu idą na spód talii. ${jokerDetected ? 'Joker spłonął.' : ''}`);
             } else {
-                // Zwykła runda: Przegrany zabiera wszystko ze stołu
                 players[loser.playerIdx].hand.push(...validCards);
                 io.emit('update-status', `KONIEC: ${loser.playerName} zabiera karty ze stołu! ${jokerDetected ? 'Joker spłonął.' : ''}`);
             }
