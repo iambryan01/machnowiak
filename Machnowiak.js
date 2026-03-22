@@ -136,10 +136,8 @@ io.on('connection', (socket) => {
             io.to(attacker.id).emit('show-pick-menu', { pool, count: 2, targetIdx: lastPlayerIdx, title: `WYBIERZ DLA SIEBIE 2 KARTY:` });
         }
 
-        // RESET PO BLEFIE: Karty wracają do talii, tylko UŻYTY Joker płonie
         setTimeout(() => {
             const allOnTable = tableCards.flatMap(m => m.cards);
-            // Tylko Jokery, które były w "combo" (czyli zostały użyte/rzucone), są usuwane
             const toReturn = allOnTable.filter(c => c.value !== 'Joker');
             gameDeck.push(...toReturn);
             
@@ -155,22 +153,50 @@ io.on('connection', (socket) => {
     socket.on('sks-decision', (decision) => {
         const pIdx = players.findIndex(p => p.id === socket.id);
         const p = players[pIdx];
-        sksResponses++;
+
         if (decision && !p.sksUsed) {
             p.sksUsed = true;
             const sksCard = gameDeck.shift();
             const tableMove = tableCards.find(m => m.playerIdx === pIdx);
+            
             if (sksCard.value === 'Joker') {
                 p.hand.push(sksCard);
                 io.to(p.id).emit('init-hand', p.hand);
+                advanceSks();
+            } else if (sksCard.value === '8' && tableMove) {
+                tableMove.cards.push(sksCard);
+                io.to(p.id).emit('show-target-menu', players.filter(pl => pl.id !== p.id).map(pl => pl.name));
             } else if (tableMove) {
                 tableMove.cards.push(sksCard);
+                advanceSks();
+            } else {
+                advanceSks();
             }
-            resolveRound(true, p.name); 
+        } else {
+            sksResponses++;
+            checkAllSks();
         }
+    });
+
+    function advanceSks() {
+        sksResponses++;
+        checkAllSks();
+    }
+
+    function checkAllSks() {
         if (sksResponses >= players.length) {
             sksResponses = 0;
             startRoundCountdown();
+        }
+    }
+
+    socket.on('target-selected', (t) => {
+        const p = players.find(pl => pl.id === socket.id);
+        p.target = t;
+        if (!p.hasPlayed) {
+            finishTurn(p);
+        } else {
+            advanceSks();
         }
     });
 
@@ -186,12 +212,6 @@ io.on('connection', (socket) => {
             timeLeft--;
         }, 1000);
     }
-
-    socket.on('target-selected', (t) => {
-        const p = players.find(pl => pl.id === socket.id);
-        p.target = t;
-        finishTurn(p);
-    });
 
     function finishTurn(p) {
         p.hasPlayed = true;
@@ -256,6 +276,9 @@ io.on('connection', (socket) => {
 
         if (top.length > 1) {
             wasBulaInRound = true;
+            const names = top.map(t => t.playerName).join(" i ");
+            io.emit('update-status', `⚔️ BUŁA między: ${names}! Dogrywka...`);
+            
             top.forEach(t => {
                 let ex = gameDeck.splice(0, 2);
                 ex.forEach(c => {
@@ -265,28 +288,31 @@ io.on('connection', (socket) => {
                     } else { t.m.cards.push(c); }
                 });
             });
-            io.emit('update-status', "⚔️ BUŁA! Dogrywka...");
-            setTimeout(() => resolveRound(false), 2000);
+            setTimeout(() => resolveRound(false), 3000);
         } else if (!isSks) {
             const all = tableCards.flatMap(m => m.cards);
             const valid = all.filter(c => c.value !== 'Joker');
             
-            // Karty idą do przegranego lub do talii po Buli
             if (wasBulaInRound) {
                 players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
                 gameDeck.push(...valid);
+                io.emit('update-status', `💀 Po dogrywce przegrywa ${loser.playerName} (${loser.power} pkt) i bierze 4 karne!`);
             } else {
                 players[loser.playerIdx].hand.push(...valid);
+                io.emit('update-status', `🃏 Rundę przegrywa ${loser.playerName} (${loser.power} pkt) i zbiera karty!`);
             }
+            
             wasBulaInRound = false; 
-            io.emit('show-sks-modal'); 
+            setTimeout(() => {
+                io.emit('show-sks-modal'); 
+            }, 2000);
         }
     }
 
     function cleanTable() {
         const allOnTable = tableCards.flatMap(m => m.cards);
         const toReturn = allOnTable.filter(c => c.value !== 'Joker');
-        gameDeck.push(...toReturn); // Zwrot kart do talii przed nową rundą
+        gameDeck.push(...toReturn); 
         
         tableCards = [];
         currentPlayerIdx = 0;
