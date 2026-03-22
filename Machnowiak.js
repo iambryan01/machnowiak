@@ -42,6 +42,7 @@ io.on('connection', (socket) => {
         gameDeck = createDeck();
         players.forEach(p => {
             p.hand = gameDeck.splice(0, 5);
+            p.sksUsed = false;
             io.to(p.id).emit('init-hand', p.hand);
         });
         nextTurn();
@@ -56,8 +57,6 @@ io.on('connection', (socket) => {
         
         if (cardInHandIdx > -1) {
             player.hand.splice(cardInHandIdx, 1);
-            
-            // Logika Blefu: Czy rzucona karta jest słabsza niż najwyższa w ręce?
             const realHandValues = player.hand.map(c => cardValues[c.value]);
             const isBlef = cardValues[card.value] < Math.max(...realHandValues, 0);
 
@@ -75,7 +74,7 @@ io.on('connection', (socket) => {
             io.emit('new-card-on-table', { card: card, playerName: player.name });
             
             if (tableCards.length === players.length) {
-                setTimeout(resolveRound, 1500);
+                setTimeout(resolveRound, 2000);
             } else {
                 currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
                 nextTurn();
@@ -85,31 +84,47 @@ io.on('connection', (socket) => {
 
     function calculatePower(card) {
         if (isFirstRound) return cardValues[card.value];
-        
-        // Specjalne moce kart
-        if (card.value === '2') return cardValues['2'] * 2; // HEWI: 2*2=4 (lub podbicie innej, tu jako stała siła 4)
+        if (card.value === '2') return 18; // HEWI: Silna karta przebijająca
         if (card.value === '8') {
             return (card.suit === '♥' || card.suit === '♦') ? -8 : -4; // BOGUŚ
         }
-        if (card.value === 'Joker') return 25; // JOHNY: Najsilniejszy
+        if (card.value === 'Joker') return 25; // JOHNY
         return cardValues[card.value];
     }
 
+    socket.on('sks-action', () => {
+        const pIdx = players.findIndex(p => p.id === socket.id);
+        const p = players[pIdx];
+        if (p.sksUsed || p.hand.length === 0 || tableCards.length === 0) return;
+
+        p.sksUsed = true;
+        const randomCardIdx = Math.floor(Math.random() * p.hand.length);
+        const sksCard = p.hand.splice(randomCardIdx, 1)[0];
+        
+        io.emit('update-status', `📢 SKS! ${p.name} losuje kartę: ${sksCard.value}${sksCard.suit}`);
+        
+        // Aktualizacja siły gracza w tej rundzie
+        const myMove = tableCards.find(m => m.playerIdx === pIdx);
+        if (myMove) {
+            myMove.power += calculatePower(sksCard);
+        }
+        
+        io.to(p.id).emit('init-hand', p.hand);
+        io.emit('update-players', players.map(p => ({name: p.name, cards: p.hand.length})));
+    });
+
     socket.on('check-blef', () => {
         if (!lastMove || lastMove.playerIdx === players.findIndex(p => p.id === socket.id)) return;
-        
-        const checkerIdx = players.findIndex(p => p.id === socket.id);
         const attacker = players[lastMove.playerIdx];
-        const checker = players[checkerIdx];
+        const checker = players[players.findIndex(p => p.id === socket.id)];
 
         if (lastMove.wasBlef) {
             attacker.hand.push(...gameDeck.splice(0, 4));
-            io.emit('blef-result', { msg: `🔥 ZŁAPANY! ${attacker.name} blefował. Dobiera 4 karty!` });
+            io.emit('blef-result', { msg: `🔥 ZŁAPANY! ${attacker.name} kłamał. Bierze 4 karty!` });
         } else {
-            // Sukces: Atakujący wymienia rękę (Zasada Machnowiaka)
             attacker.hand = gameDeck.splice(0, 2); 
             checker.hand.push(...gameDeck.splice(0, 3));
-            io.emit('blef-result', { msg: `✅ CZYSTO! ${attacker.name} mówił prawdę. ${checker.name} bierze 3 karne!` });
+            io.emit('blef-result', { msg: `✅ CZYSTO! ${checker.name} dobiera 3 karne.` });
         }
         updateAllHands();
     });
@@ -128,23 +143,14 @@ io.on('connection', (socket) => {
         });
 
         if (winners.length > 1) {
-            // BUŁA (Remis)
-            io.emit('update-status', `⚔️ BUŁA! Remis między: ${winners.map(i => players[i].name).join(', ')}`);
-            winners.forEach(i => {
-                players[i].hand.push(...gameDeck.splice(0, 2));
-            });
-            // W bule przegrany (wszyscy poza remisującymi) bierze 4
-            players.forEach((p, i) => {
-                if (!winners.includes(i)) p.hand.push(...gameDeck.splice(0, 4));
-            });
+            io.emit('update-status', `⚔️ BUŁA! Remis!`);
+            winners.forEach(i => players[i].hand.push(...gameDeck.splice(0, 2)));
+            players.forEach((p, i) => { if (!winners.includes(i)) p.hand.push(...gameDeck.splice(0, 4)); });
         } else {
-            // Normalne rozstrzygnięcie + Zasada Porażki
             const winIdx = winners[0];
-            players.forEach((p, i) => {
-                if (i !== winIdx) p.hand.push(...gameDeck.splice(0, 1));
-            });
+            players.forEach((p, i) => { if (i !== winIdx) p.hand.push(...gameDeck.splice(0, 1)); });
             currentPlayerIndex = winIdx;
-            io.emit('update-status', `Rundę wygrywa: ${players[winIdx].name}`);
+            io.emit('update-status', `Zwycięzca starcia: ${players[winIdx].name}`);
         }
 
         tableCards = [];
@@ -155,13 +161,14 @@ io.on('connection', (socket) => {
     }
 
     function nextTurn() {
+        if (!gameStarted) return;
         const p = players[currentPlayerIndex];
         if (p.hand.length === 0) {
-            io.emit('update-status', `🏆 KONIEC! WYGRAŁ ${p.name}!`);
+            io.emit('update-status', `🏆 GRĘ WYGRAŁ: ${p.name}!`);
             gameStarted = false;
             return;
         }
-        io.emit('update-status', `Tura: ${p.name}${isFirstRound ? ' (RUNDA 1 - NAJWYŻSZA!)' : ''}`);
+        io.emit('update-status', `Tura: ${p.name}${isFirstRound ? ' (RUNDA 1)' : ''}`);
         io.emit('update-players', players.map(p => ({name: p.name, cards: p.hand.length})));
     }
 
@@ -172,4 +179,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, '0.0.0.0', () => console.log('MACHNOWIAK 2.0 GOTOWY'));
+http.listen(PORT, '0.0.0.0', () => console.log('MACHNOWIAK 2.0 FINAL READY'));
