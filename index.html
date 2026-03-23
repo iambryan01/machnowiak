@@ -10,75 +10,52 @@
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
 
         #sidebar { width: 200px; background: rgba(0,0,0,0.8); border-right: 2px solid var(--accent); padding: 16px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
-        .player-card { background: rgba(255,255,255,0.05); padding: 8px 10px; margin: 4px 0; border-radius: 8px; border-left: 4px solid transparent; transition: 0.3s; font-size: 0.88rem; }
+        .player-card { background: rgba(255,255,255,0.05); padding: 8px 10px; margin: 4px 0; border-radius: 8px; border-left: 4px solid transparent; transition: 0.3s; font-size: 0.85rem; }
         .player-card.active { border-left-color: var(--gold); background: rgba(241,196,15,0.1); }
+        .player-card.waiting { border-left-color: #e67e22; }
 
         #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 16px; position: relative; overflow: hidden; }
 
         #stół {
             background: rgba(255,255,255,0.03); width: 95%; flex-shrink: 0;
-            height: 340px; border-radius: 24px;
+            height: 320px; border-radius: 24px;
             border: 2px dashed #444; display: flex; justify-content: center; align-items: flex-start;
             gap: 40px; padding-top: 60px; position: relative; overflow: hidden;
         }
 
-        /* ── STOS KART NA STOLE ── */
-        .card-stack {
-            position: relative;
-            /* szerokość stałe, wysokość rozciągana dynamicznie przez JS */
-            width: 80px;
-            flex-shrink: 0;
-        }
-        .stack-info {
-            position: absolute; top: -48px; width: 120px; left: 50%;
-            transform: translateX(-50%); text-align: center;
-            color: var(--gold); font-weight: bold; font-size: 0.82rem;
-        }
+        .card-stack { position: relative; width: 80px; flex-shrink: 0; }
+        .stack-info { position: absolute; top: -48px; width: 120px; left: 50%; transform: translateX(-50%); text-align: center; color: var(--gold); font-weight: bold; font-size: 0.82rem; }
 
-        /* ── KARTA (domyślnie: absolute, do stosu na stole) ── */
         .karta {
-            width: 80px; height: 115px;
-            background: white; color: black; border-radius: 9px;
-            border: 2px solid #222;
+            width: 80px; height: 115px; background: white; color: black;
+            border-radius: 9px; border: 2px solid #222;
             box-shadow: 2px 2px 8px rgba(0,0,0,0.5);
             overflow: hidden; position: absolute;
             transition: transform 0.18s ease-out, border-color 0.15s, box-shadow 0.15s;
         }
+        /* Kaskada - nth-child(2) = pierwsza karta (nth-child(1) = .stack-info) */
+        .card-stack .karta:nth-child(2) { top: 0px;   z-index: 2; }
+        .card-stack .karta:nth-child(3) { top: 28px;  z-index: 3; }
+        .card-stack .karta:nth-child(4) { top: 56px;  z-index: 4; }
+        .card-stack .karta:nth-child(5) { top: 84px;  z-index: 5; }
+        .card-stack .karta:nth-child(6) { top: 112px; z-index: 6; }
+        .card-stack .karta:nth-child(7) { top: 140px; z-index: 7; }
+        .card-stack .karta:nth-child(8) { top: 168px; z-index: 8; }
 
-        /*
-         * Kaskadowe przesunięcie w stosie.
-         * nth-child(2) = pierwsza karta (za .stack-info który jest :nth-child(1))
-         * Każda kolejna karta przesuwa się o STACK_OFFSET px w dół.
-         * Dzięki temu widać oznaczenia poprzednich kart.
-         */
-        .card-stack .karta:nth-child(2)  { top: 0px;   z-index: 2; }
-        .card-stack .karta:nth-child(3)  { top: 28px;  z-index: 3; }
-        .card-stack .karta:nth-child(4)  { top: 56px;  z-index: 4; }
-        .card-stack .karta:nth-child(5)  { top: 84px;  z-index: 5; }
-        .card-stack .karta:nth-child(6)  { top: 112px; z-index: 6; }
-        .card-stack .karta:nth-child(7)  { top: 140px; z-index: 7; }
-        .card-stack .karta:nth-child(8)  { top: 168px; z-index: 8; }
-
-        /* Wersja zmniejszona gdy kart jest >= 5 */
-        .card-stack.small .karta {
-            width: 58px; height: 84px;
-        }
+        .card-stack.small .karta { width: 58px; height: 84px; }
         .card-stack.small .karta .val   { font-size: 0.85rem; top: 3px; left: 4px; }
         .card-stack.small .karta .suit  { font-size: 0.72rem; top: 16px; left: 5px; }
         .card-stack.small .karta .val-br { font-size: 0.75rem; bottom: 3px; right: 4px; }
-        .card-stack.small .karta:nth-child(2)  { top: 0px;   }
-        .card-stack.small .karta:nth-child(3)  { top: 22px;  }
-        .card-stack.small .karta:nth-child(4)  { top: 44px;  }
-        .card-stack.small .karta:nth-child(5)  { top: 66px;  }
-        .card-stack.small .karta:nth-child(6)  { top: 88px;  }
-        .card-stack.small .karta:nth-child(7)  { top: 110px; }
-        .card-stack.small .karta:nth-child(8)  { top: 132px; }
+        .card-stack.small .karta:nth-child(2) { top: 0px;   }
+        .card-stack.small .karta:nth-child(3) { top: 22px;  }
+        .card-stack.small .karta:nth-child(4) { top: 44px;  }
+        .card-stack.small .karta:nth-child(5) { top: 66px;  }
+        .card-stack.small .karta:nth-child(6) { top: 88px;  }
+        .card-stack.small .karta:nth-child(7) { top: 110px; }
+        .card-stack.small .karta:nth-child(8) { top: 132px; }
 
-        /* Karta w ręce */
-        .karta.in-hand { position: relative; top: 0 !important; cursor: pointer; flex-shrink: 0; }
-        /* Karta w pick-menu */
-        .karta.in-pick { position: relative; top: 0 !important; cursor: pointer; }
-        /* Karta w reveal */
+        .karta.in-hand   { position: relative; top: 0 !important; cursor: pointer; flex-shrink: 0; }
+        .karta.in-pick   { position: relative; top: 0 !important; cursor: pointer; }
         .karta.in-reveal { position: relative; top: 0 !important; display: inline-block; margin: 2px; }
 
         .karta.selected {
@@ -87,6 +64,7 @@
             box-shadow: 0 0 14px var(--gold) !important;
             z-index: 20;
         }
+        .karta.invalid-hint { border-color: var(--danger) !important; }
 
         .karta .val   { position: absolute; top: 4px; left: 6px; font-weight: 900; font-size: 1.15rem; line-height: 1; }
         .karta .suit  { position: absolute; top: 22px; left: 7px; font-size: 0.9rem; }
@@ -94,7 +72,6 @@
         .karta.red { color: var(--danger); }
         .karta.zakryta { background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%); color: transparent; border: 1px solid rgba(255,255,255,0.3); }
 
-        /* ── RĘKA ── */
         #bottom-panel {
             display: flex; align-items: flex-end; gap: 16px; width: 95%;
             padding: 8px 0; margin-top: auto; position: relative; flex-shrink: 0;
@@ -110,19 +87,19 @@
         #reka-container { flex-grow: 1; text-align: center; position: relative; }
         #reka {
             display: flex; gap: 6px; padding: 28px 6px 6px;
-            flex-wrap: wrap; justify-content: center;
-            min-height: 150px; align-items: flex-end;
+            flex-wrap: wrap; justify-content: center; min-height: 150px; align-items: flex-end;
         }
         #reka.many-cards .karta.in-hand { width: 56px; height: 82px; }
         #reka.many-cards .karta.in-hand .val   { font-size: 0.82rem; top: 3px; left: 4px; }
-        #reka.many-cards .karta.in-hand .suit  { font-size: 0.7rem;  top: 15px; left: 5px; }
+        #reka.many-cards .karta.in-hand .suit  { font-size: 0.7rem; top: 15px; left: 5px; }
         #reka.many-cards .karta.in-hand .val-br { font-size: 0.72rem; bottom: 3px; right: 4px; }
 
         #combo-info {
-            background: rgba(241,196,15,0.12); border: 1px solid rgba(241,196,15,0.4); border-radius: 8px;
-            padding: 5px 14px; font-size: 0.82rem; color: var(--gold); margin-bottom: 5px;
-            min-height: 26px; text-align: center;
+            background: rgba(241,196,15,0.12); border: 1px solid rgba(241,196,15,0.4);
+            border-radius: 8px; padding: 5px 14px; font-size: 0.82rem; color: var(--gold);
+            margin-bottom: 5px; min-height: 26px; text-align: center;
         }
+        #combo-info.error { background: rgba(231,76,60,0.15); border-color: var(--danger); color: var(--danger); }
 
         .main-actions {
             position: absolute; top: -48px; left: 50%; transform: translateX(-50%);
@@ -142,10 +119,7 @@
             z-index: 9999; min-width: 360px; max-width: 92vw; text-align: center;
             box-shadow: 0 0 40px rgba(0,0,0,0.9);
         }
-        #pick-cards-grid {
-            display: flex; gap: 10px; justify-content: center; align-items: flex-end;
-            flex-wrap: wrap; margin-top: 16px; min-height: 130px;
-        }
+        #pick-cards-grid { display: flex; gap: 10px; justify-content: center; align-items: flex-end; flex-wrap: wrap; margin-top: 16px; min-height: 130px; }
         #target-menu {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: #10102a; border: 2px solid var(--gold); padding: 24px; border-radius: 16px;
@@ -158,6 +132,20 @@
         .reveal-cards { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
         .reveal-player h4 { margin: 0 0 5px; color: var(--gold); font-size: 0.9rem; }
         .reveal-power { font-size: 1rem; font-weight: bold; margin-top: 6px; }
+
+        /* ── DEBUG PANEL ── */
+        #debug-panel {
+            position: fixed; bottom: 0; right: 0; width: 340px; max-height: 260px;
+            background: rgba(0,0,0,0.92); border: 1px solid #333; border-radius: 8px 0 0 0;
+            font-size: 0.72rem; font-family: monospace; color: #0f0; overflow-y: auto;
+            padding: 8px; z-index: 9000; display: none;
+        }
+        #debug-panel.visible { display: block; }
+        #debug-toggle {
+            position: fixed; bottom: 0; right: 0; background: #222; color: #0f0;
+            border: 1px solid #0f0; font-size: 0.7rem; padding: 3px 8px;
+            cursor: pointer; z-index: 9001; border-radius: 4px 0 0 0;
+        }
     </style>
 </head>
 <body>
@@ -203,25 +191,54 @@
     <div id="target-list" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"></div>
 </div>
 
+<!-- DEBUG -->
+<button id="debug-toggle" onclick="toggleDebug()">DBG</button>
+<div id="debug-panel">
+    <div id="debug-content">brak danych</div>
+</div>
+
 <script>
     const socket = io();
     let myNick = null;
     let myHand = [];
-    let selectedCards = []; // { value, suit, _idx }
+    let selectedCards = [];
     let isMyTurn = false;
+    let debugVisible = false;
 
     window.onload = () => {
         myNick = prompt('Twój Nick:');
         if (myNick) socket.emit('join', myNick);
     };
 
+    function toggleDebug() {
+        debugVisible = !debugVisible;
+        document.getElementById('debug-panel').classList.toggle('visible', debugVisible);
+    }
+
+    // ── DEBUG ─────────────────────────────────────────────────────────────────
+    socket.on('debug-state', state => {
+        const el = document.getElementById('debug-content');
+        el.innerHTML = `
+<b>gameStarted:</b> ${state.gameStarted}<br>
+<b>currentPlayer:</b> ${state.currentPlayer} (idx ${state.currentPlayerIdx})<br>
+<b>canCheckBlef:</b> ${state.canCheckBlef} | <b>buła:</b> ${state.wasBulaInRound}<br>
+<b>sksResponses:</b> ${state.sksResponses}<br>
+<b>Stół:</b><br>
+${state.tableCards.map(t => `&nbsp;${t.player}: ${t.cards} → ${t.target||'-'}`).join('<br>')||'&nbsp;(pusty)'}<br>
+<b>Gracze:</b><br>
+${state.players.map(p => `&nbsp;${p.name}: ${p.handCount}kart hasPlayed=${p.hasPlayed} sks=${p.sksUsed} waiting=${p.waitingForTarget}`).join('<br>')}`;
+    });
+
     // ── EVENTY SERWERA ────────────────────────────────────────────────────────
 
     socket.on('update-player-list', list => {
-        document.getElementById('player-list').innerHTML = list.map(p => `
-            <div class="player-card ${p.isCurrent ? 'active' : ''}">
-                <strong>${p.name}</strong><br>🃏 ${p.count} ${p.sksUsed ? '🚫SKS' : ''}
-            </div>`).join('');
+        document.getElementById('player-list').innerHTML = list.map(p => {
+            let cls = p.isCurrent ? 'active' : '';
+            if (p.waitingForTarget) cls += ' waiting';
+            return `<div class="player-card ${cls}">
+                <strong>${p.name}</strong><br>🃏 ${p.count} ${p.sksUsed ? '🚫' : ''}${p.waitingForTarget ? ' ⏳cel' : ''}
+            </div>`;
+        }).join('');
         if (myNick) {
             const me = list.find(p => p.name === myNick);
             const wasMyTurn = isMyTurn;
@@ -231,24 +248,10 @@
     });
 
     socket.on('update-status', msg => { document.getElementById('status').innerText = msg; });
-
-    socket.on('init-hand', hand => {
-        myHand = hand;
-        selectedCards = [];
-        renderHand();
-    });
-
+    socket.on('init-hand', hand => { myHand = hand; selectedCards = []; renderHand(); });
     socket.on('clear-table', () => { document.getElementById('stół').innerHTML = ''; });
-
-    socket.on('game-begun', () => {
-        document.getElementById('start-btn').style.display = 'none';
-        isMyTurn = false;
-    });
-
-    socket.on('update-timer', time => {
-        document.getElementById('timer-box').innerText = time > 0 ? `⏱ KONIEC RUNDY ZA: ${time}s` : '';
-    });
-
+    socket.on('game-begun', () => { document.getElementById('start-btn').style.display = 'none'; isMyTurn = false; });
+    socket.on('update-timer', time => { document.getElementById('timer-box').innerText = time > 0 ? `⏱ KONIEC RUNDY ZA: ${time}s` : ''; });
     socket.on('error-msg', msg => { isMyTurn = false; cancelCombo(); alert(msg); });
 
     socket.on('update-table-hidden', data => {
@@ -257,21 +260,16 @@
         data.forEach(p => {
             const cardCount = p.cards ? p.cards.length : 1;
             const isSmall = cardCount >= 5;
-            // Wysokość stosu: pierwsza karta + przesunięcie kolejnych
             const offset = isSmall ? 22 : 28;
-            const stackH = 115 + Math.max(0, cardCount - 1) * offset;
-
+            const stackH = (isSmall ? 84 : 115) + Math.max(0, cardCount - 1) * offset;
             const stack = document.createElement('div');
             stack.className = 'card-stack' + (isSmall ? ' small' : '');
             stack.style.height = stackH + 'px';
             stack.innerHTML = `<div class="stack-info">${p.playerName}</div>`;
-
             if (p.cards && p.cards.length > 0) {
                 p.cards.forEach(c => stack.appendChild(makeCard(c)));
             } else {
-                const rev = document.createElement('div');
-                rev.className = 'karta zakryta';
-                stack.appendChild(rev);
+                const rev = document.createElement('div'); rev.className = 'karta zakryta'; stack.appendChild(rev);
             }
             stol.appendChild(stack);
         });
@@ -289,30 +287,21 @@
     socket.on('reveal-detailed', results => {
         const stol = document.getElementById('stół');
         stol.innerHTML = '';
-        const row = document.createElement('div');
-        row.className = 'reveal-row';
+        const row = document.createElement('div'); row.className = 'reveal-row';
         results.forEach(r => {
-            const div = document.createElement('div');
-            div.className = 'reveal-player';
+            const div = document.createElement('div'); div.className = 'reveal-player';
             div.innerHTML = `<h4>${r.name}</h4>`;
             const cr = document.createElement('div'); cr.className = 'reveal-cards';
             r.cards.forEach(c => { const el = makeCard(c); el.classList.add('in-reveal'); cr.appendChild(el); });
             div.appendChild(cr);
             const pwr = document.createElement('div'); pwr.className = 'reveal-power';
-            pwr.innerText = `${r.finalPower} pkt`;
-            div.appendChild(pwr);
+            pwr.innerText = `${r.finalPower} pkt`; div.appendChild(pwr);
             row.appendChild(div);
         });
         stol.appendChild(row);
     });
 
-    socket.on('show-sks-modal', () => {
-        isMyTurn = false;
-        cancelCombo();
-        document.getElementById('sks-panel').style.display = 'block';
-    });
-
-    // sks-result usunięty — nie pokazujemy toastu, karta pojawia się na stole
+    socket.on('show-sks-modal', () => { isMyTurn = false; cancelCombo(); document.getElementById('sks-panel').style.display = 'block'; });
 
     socket.on('show-pick-menu', data => {
         const menu = document.getElementById('pick-menu');
@@ -324,8 +313,7 @@
             const el = makeCard(k); el.classList.add('in-pick');
             el.onclick = () => {
                 if (el.classList.contains('selected')) return;
-                el.classList.add('selected');
-                picked.push(k);
+                el.classList.add('selected'); picked.push(k);
                 if (picked.length === data.count) {
                     socket.emit('pick-cards', { cards: picked, targetIdx: data.targetIdx });
                     menu.style.display = 'none';
@@ -336,9 +324,7 @@
         menu.style.display = 'block';
     });
 
-    socket.on('show-target-menu', targets => {
-        openTargetMenu(targets, t => socket.emit('target-selected', t));
-    });
+    socket.on('show-target-menu', targets => { openTargetMenu(targets, t => socket.emit('target-selected', t)); });
 
     socket.on('reset-client-ui', () => {
         myHand = []; selectedCards = []; isMyTurn = false;
@@ -360,8 +346,7 @@
         reka.innerHTML = '';
         reka.className = myHand.length > 9 ? 'many-cards' : '';
         myHand.forEach((k, i) => {
-            const el = makeCard(k);
-            el.classList.add('in-hand');
+            const el = makeCard(k); el.classList.add('in-hand');
             if (selectedCards.some(s => s._idx === i)) el.classList.add('selected');
             el.onclick = () => handleCardClick(k, i);
             reka.appendChild(el);
@@ -375,82 +360,114 @@
         document.getElementById('cancel-btn').style.display = has ? 'inline-block' : 'none';
 
         const info = document.getElementById('combo-info');
+        info.className = 'combo-info'; // reset error
         if (!isMyTurn) { info.innerText = ''; return; }
         if (!has) { info.innerText = '👆 Kliknij kartę aby ją wybrać'; return; }
+
+        // Walidacja po stronie klienta (ta sama logika co serwer)
+        const err = clientValidateCombo(selectedCards);
+        if (err) {
+            info.innerText = '⚠ ' + err;
+            info.className = 'error';
+            document.getElementById('play-btn').style.display = 'none';
+            return;
+        }
 
         const hasJoker = selectedCards.some(s => s.value === 'Joker');
         const hasTwo   = selectedCards.some(s => s.value === '2');
         const hasEight = selectedCards.some(s => s.value === '8');
         const names = selectedCards.map(c => c.value === 'Joker' ? '🃏Joker' : `${c.value}${c.suit}`).join(' + ');
         let hint = `Wybrano: ${names}`;
-
         if (hasJoker) {
-            const jokerCount = selectedCards.filter(s => s.value === 'Joker').length;
-            const nonJokerCount = selectedCards.length - jokerCount;
-            if (nonJokerCount < 2) hint += ` — wybierz jeszcze ${2 - nonJokerCount} kartę/karty`;
-        } else if (hasTwo && selectedCards.length < 2) {
-            hint += ' — wybierz kartę do podwojenia';
-        } else if (hasEight && selectedCards.length < 2) {
-            hint += ' — możesz dodać kartę lub zagrać samą 8';
-        } else if (hasEight) {
-            hint += ' — po zagraniu wybierzesz cel dla 8';
-        }
+            const nonJ = selectedCards.filter(s => s.value !== 'Joker').length;
+            if (nonJ < 2) hint += ` — wybierz jeszcze ${2-nonJ} kartę`;
+        } else if (hasTwo && selectedCards.length < 2) hint += ' — wybierz kartę do podwojenia';
+        else if (hasEight && selectedCards.length === 1) hint += ' — możesz dodać kartę lub zagrać samą 8';
+        else if (hasEight) hint += ' — po zagraniu wybierzesz cel';
         info.innerText = hint;
     }
 
+    // Walidacja kombo po stronie klienta (odzwierciedla logikę serwera)
+    function clientValidateCombo(cards) {
+        if (cards.length === 0) return null;
+        const hasJoker = cards.some(c => c.value === 'Joker');
+        const hasTwo   = cards.some(c => c.value === '2');
+        const hasEight = cards.some(c => c.value === '8');
+        const jokerCount = cards.filter(c => c.value === 'Joker').length;
+
+        if (jokerCount > 1) return 'Nie można zagrać dwóch Jokerów.';
+
+        if (hasJoker) {
+            const nonJokers = cards.filter(c => c.value !== 'Joker');
+            if (nonJokers.length < 2) return null; // jeszcze wybiera
+            if (nonJokers.length > 2) return 'Joker + max 2 karty.';
+            const nonZero = nonJokers.filter(c => !['2','8','Joker'].includes(c.value));
+            if (nonZero.length === 0) return 'Joker musi zawierać kartę punktową.';
+            return null;
+        }
+
+        if (hasTwo) {
+            if (cards.length < 2) return null; // jeszcze wybiera
+            if (cards.length > 3) return 'Za dużo kart z dwójką.';
+            const others = cards.filter(c => c.value !== '2');
+            const hasBase = others.some(c => !['2','8','Joker'].includes(c.value));
+            if (!hasBase) return 'Dwójka musi zawierać kartę punktową.';
+            return null;
+        }
+
+        if (hasEight) {
+            if (cards.length > 2) return 'Z 8 można zagrać max 1 dodatkową kartę.';
+            if (cards.length === 2) {
+                const other = cards.find(c => c.value !== '8');
+                if (other && ['Joker','8'].includes(other.value)) return 'Ósemka + karta punktowa tylko.';
+            }
+            return null;
+        }
+
+        if (cards.length > 1) return 'Zwykłą kartę graj solo.';
+        return null;
+    }
+
     // ── WYBÓR KART ────────────────────────────────────────────────────────────
-    //
-    // Zasady combo:
-    //   Joker        → wymaga dokładnie 2 dodatkowych kart (łącznie 3: Joker + 2 karty)
-    //   "2"          → 1 karta bazowa (łącznie 2)
-    //   "8"          → 0 lub 1 karta bazowa (łącznie 1 lub 2), cel wybierany przez menu
-    //   normalna     → solo (łącznie 1)
 
     function handleCardClick(card, idx) {
         if (!isMyTurn) return;
 
-        // Odznaczanie
         const selIdx = selectedCards.findIndex(s => s._idx === idx);
-        if (selIdx !== -1) {
-            selectedCards.splice(selIdx, 1);
-            renderHand();
-            return;
-        }
+        if (selIdx !== -1) { selectedCards.splice(selIdx, 1); renderHand(); return; }
 
         const hasJoker  = selectedCards.some(s => s.value === 'Joker');
         const hasTwo    = selectedCards.some(s => s.value === '2');
         const hasEight  = selectedCards.some(s => s.value === '8');
-        const hasNormal = selectedCards.some(s => !['2', '8', 'Joker'].includes(s.value));
+        const hasNormal = selectedCards.some(s => !['2','8','Joker'].includes(s.value));
+        const jokerCount = selectedCards.filter(s => s.value === 'Joker').length;
 
         let canAdd = false;
 
         if (selectedCards.length === 0) {
-            // Zawsze można wybrać pierwszą kartę
             canAdd = true;
 
         } else if (hasJoker) {
-            // Joker wybrany → potrzeba łącznie 2 dodatkowych (nie-Jokerów)
-            // Liczymy ile nie-Jokerów jest już wybrane
-            const nonJokerSelected = selectedCards.filter(s => s.value !== 'Joker').length;
-            if (nonJokerSelected < 2 && card.value !== 'Joker') {
-                canAdd = true;
-            }
+            // Joker wymaga 2 kart nie-Jokerów — nie dodawaj Jokera do Jokera
+            const nonJInSel = selectedCards.filter(s => s.value !== 'Joker').length;
+            if (nonJInSel < 2 && card.value !== 'Joker') canAdd = true;
 
-        } else if (card.value === 'Joker' && !hasJoker && selectedCards.length <= 2) {
-            // Dodanie Jokera jako drugiej/trzeciej karty do istniejących kart
-            // (gracz może najpierw wybrać 1-2 karty, potem dodać Jokera)
+        } else if (card.value === 'Joker' && selectedCards.length <= 2 && jokerCount === 0) {
+            // Dodanie Jokera do istniejących kart (max 2 karty przed Jokerem)
+            // Sprawdź czy jest przynajmniej 1 karta punktowa poza tym co już jest
             canAdd = true;
 
-        } else if (hasTwo && selectedCards.length < 2 && card.value !== '2' && card.value !== 'Joker') {
-            // "2" + 1 karta bazowa
-            canAdd = true;
+        } else if (hasTwo && selectedCards.length < 3 && card.value !== 'Joker') {
+            // 2 + do 2 kart (8 + karta + 2 = 3 karty max)
+            // Nie dodawaj kolejnej 2
+            if (card.value !== '2') canAdd = true;
 
         } else if (hasEight && selectedCards.length < 2 && card.value !== '8' && card.value !== 'Joker') {
-            // "8" + opcjonalnie 1 karta bazowa
+            // 8 + 1 karta (nie 8, nie Joker)
             canAdd = true;
 
-        } else if (hasNormal && !hasEight && !hasTwo && selectedCards.length === 1 && card.value === '8') {
-            // Karta normalna + 8 jako druga
+        } else if (hasNormal && !hasEight && !hasTwo && !hasJoker && selectedCards.length === 1 && card.value === '8') {
+            // Normalna + 8
             canAdd = true;
         }
 
@@ -463,30 +480,36 @@
     function submitCombo() {
         if (!isMyTurn || selectedCards.length === 0) return;
 
+        // Finalna walidacja
+        const err = clientValidateCombo(selectedCards);
+        if (err) { alert(err); return; }
+
         const hasJoker = selectedCards.some(s => s.value === 'Joker');
         const hasTwo   = selectedCards.some(s => s.value === '2');
         const hasEight = selectedCards.some(s => s.value === '8');
 
-        // Walidacja Jokera: potrzeba Joker + 2 karty = 3 łącznie
         if (hasJoker) {
             const nonJokerCount = selectedCards.filter(s => s.value !== 'Joker').length;
-            if (nonJokerCount < 2) {
-                alert('Joker wymaga wybrania jeszcze 2 kart!'); return;
-            }
+            if (nonJokerCount < 2) { alert('Joker wymaga 2 dodatkowych kart!'); return; }
         }
-        if (hasTwo && selectedCards.length < 2) { alert('"2" wymaga wybrania karty bazowej!'); return; }
+        if (hasTwo && selectedCards.length < 2) { alert('"2" wymaga karty bazowej!'); return; }
 
         const cleanCards = selectedCards.map(({ _idx, ...card }) => card);
 
         if (hasEight) {
+            // Wyślij combo — serwer będzie czekał na target-selected ZANIM przesunie turę
+            // Klient pokazuje menu, serwer dostaje play-combo z target=null i czeka
             const targets = [];
             document.querySelectorAll('#player-list .player-card strong').forEach(el => {
                 if (el.innerText !== myNick) targets.push(el.innerText);
             });
+            // Najpierw wyślij combo na serwer (bez target)
+            isMyTurn = false;
+            socket.emit('play-combo', { cards: cleanCards, target: null });
+            cancelCombo();
+            // Potem pokaż menu — odpowiedź trafi do target-selected na serwerze
             openTargetMenu(targets, target => {
-                isMyTurn = false;
-                socket.emit('play-combo', { cards: cleanCards, target });
-                cancelCombo();
+                socket.emit('target-selected', target);
             });
         } else {
             isMyTurn = false;
