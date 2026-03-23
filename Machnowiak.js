@@ -6,7 +6,7 @@ const path = require('path');
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-const cardValues = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, 'Joker': 0 };
+const cardValues = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 0, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, 'Joker': 0 };
 
 let gameDeck = [];
 let players = [];
@@ -32,25 +32,21 @@ function createDeck() {
 }
 
 io.on('connection', (socket) => {
-    // --- LOGIKA DOŁĄCZANIA ---
     socket.on('join', (name) => {
         if (gameStarted) return;
         players.push({ id: socket.id, name, hand: [], hasPlayed: false, currentCombo: [], target: null, sksUsed: false });
         updatePlayerList();
     });
 
-    // --- LOGIKA ROZŁĄCZANIA (NAPRAWA DUCHÓW) ---
     socket.on('disconnect', () => {
         const index = players.findIndex(p => p.id === socket.id);
         if (index !== -1) {
             const playerName = players[index].name;
-            players.splice(index, 1); // Usuwa gracza z pamięci serwera
-            
+            players.splice(index, 1);
             if (!gameStarted) {
                 updatePlayerList();
             } else {
                 io.emit('update-status', `🏃 Gracz ${playerName} opuścił grę.`);
-                // Jeśli w trakcie gry wyjdzie gracz, którego była tura, resetujemy do początku listy
                 if (index === currentPlayerIdx) currentPlayerIdx = 0;
                 updatePlayerList();
             }
@@ -159,7 +155,6 @@ io.on('connection', (socket) => {
             const allOnTable = tableCards.flatMap(m => m.cards);
             const toReturn = allOnTable.filter(c => c.value !== 'Joker');
             gameDeck.push(...toReturn);
-            
             tableCards = [];
             players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; });
             currentPlayerIdx = winnerIdx;
@@ -169,6 +164,7 @@ io.on('connection', (socket) => {
         }, 3000);
     });
 
+    // --- POPRAWIONY SKS ---
     socket.on('sks-decision', (decision) => {
         const pIdx = players.findIndex(p => p.id === socket.id);
         const p = players[pIdx];
@@ -181,13 +177,17 @@ io.on('connection', (socket) => {
             if (sksCard.value === 'Joker') {
                 p.hand.push(sksCard);
                 io.to(p.id).emit('init-hand', p.hand);
+                io.emit('update-status', `${p.name} wylosował Jokera z SKS!`);
                 advanceSks();
-            } else if (sksCard.value === '8' && tableMove) {
-                tableMove.cards.push(sksCard);
-                io.to(p.id).emit('show-target-menu', players.filter(pl => pl.id !== p.id).map(pl => pl.name));
             } else if (tableMove) {
                 tableMove.cards.push(sksCard);
-                advanceSks();
+                if (sksCard.value === '8') {
+                    // Tutaj rozróżniamy kolor ósemki
+                    const penalty = (sksCard.suit === '♥' || sksCard.suit === '♦') ? 8 : 4;
+                    io.to(p.id).emit('show-target-menu', players.filter(pl => pl.id !== p.id).map(pl => pl.name));
+                } else {
+                    advanceSks();
+                }
             } else {
                 advanceSks();
             }
@@ -212,6 +212,12 @@ io.on('connection', (socket) => {
     socket.on('target-selected', (t) => {
         const p = players.find(pl => pl.id === socket.id);
         p.target = t;
+        const pIdx = players.indexOf(p);
+        const move = tableCards.find(m => m.playerIdx === pIdx);
+        
+        // Aktualizacja celu w ruchu na stole
+        if(move) move.target = t;
+
         if (!p.hasPlayed) {
             finishTurn(p);
         } else {
@@ -257,14 +263,22 @@ io.on('connection', (socket) => {
     }
 
     function calculatePower(cards, isBula) {
-        let pwr = 0;
-        const base = cards.filter(c => c.value !== '8' && c.value !== '2' && c.value !== 'Joker');
-        pwr = base.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
-        if (cards.some(c => c.value === '2')) pwr *= 2;
-        if (isBula) {
-            cards.forEach(c => {
-                if (c.value === '8') pwr -= (c.suit === '♥' || c.suit === '♦') ? 8 : 4;
-            });
+        if (!cards || cards.length === 0) return 0;
+        
+        // Zgodnie z zasadą "stos" - bierzemy pierwszą kartę
+        let firstCard = cards[0];
+        let pwr = cardValues[firstCard.value] || 0;
+
+        // Jeśli jest SKS (druga karta)
+        if (cards.length > 1) {
+            let nextCard = cards[1];
+            if (nextCard.value === '2') {
+                pwr *= 2;
+            } else if (nextCard.value === '8' || nextCard.value === 'Joker') {
+                pwr = 0;
+            } else {
+                pwr = cardValues[nextCard.value] || 0;
+            }
         }
         return pwr;
     }
@@ -274,17 +288,16 @@ io.on('connection', (socket) => {
             playerIdx: m.playerIdx, playerName: m.playerName, power: calculatePower(m.cards, wasBulaInRound), m: m 
         }));
 
-        if (!wasBulaInRound) {
-            tableCards.forEach(move => {
-                move.cards.forEach(card => {
-                    if (card.value === '8' && move.target) {
-                        const p = (card.suit === '♥' || card.suit === '♦') ? 8 : 4;
-                        const t = res.find(r => r.playerName === move.target);
-                        if (t) t.power -= p;
-                    }
-                });
+        // Nakładanie kar z ósemek (poza Bułą)
+        tableCards.forEach(move => {
+            move.cards.forEach(card => {
+                if (card.value === '8' && move.target) {
+                    const penalty = (card.suit === '♥' || card.suit === '♦') ? 8 : 4;
+                    const t = res.find(r => r.playerName === move.target);
+                    if (t) t.power -= penalty;
+                }
             });
-        }
+        });
 
         io.emit('reveal-detailed', res.map(r => ({ name: r.playerName, cards: r.m.cards, finalPower: r.power })));
 
@@ -335,7 +348,7 @@ io.on('connection', (socket) => {
         
         tableCards = [];
         currentPlayerIdx = 0;
-        players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; });
+        players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.sksUsed = false; });
         io.emit('clear-table');
         io.emit('update-status', `NOWA RUNDA - Zaczyna: ${players[currentPlayerIdx].name}`);
         updatePlayerList();
