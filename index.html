@@ -14,50 +14,74 @@
         .player-card.active { border-left-color: var(--gold); background: rgba(241,196,15,0.1); }
 
         #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 20px; position: relative; overflow: hidden; }
+
         #stół {
             background: rgba(255,255,255,0.03); width: 95%; height: 420px; border-radius: 30px;
             border: 2px dashed #444; display: flex; justify-content: center; align-items: flex-start;
             gap: 60px; padding-top: 80px; position: relative; flex-shrink: 0;
         }
 
-        .card-stack { position: relative; width: 90px; height: 130px; transition: 0.3s; }
+        .card-stack { position: relative; width: 90px; height: 200px; }
         .stack-info { position: absolute; top: -70px; width: 140px; left: 50%; transform: translateX(-50%); text-align: center; color: var(--gold); font-weight: bold; font-size: 0.9rem; }
 
+        /* Bazowa karta - position absolute dla stosu na stole */
         .karta {
             width: 90px; height: 130px; background: white; color: black; border-radius: 10px;
             border: 2px solid #222; position: absolute; box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
-            display: block; padding: 0; overflow: hidden;
+            overflow: hidden;
             transition: transform 0.2s ease-out, border-color 0.15s, box-shadow 0.15s;
         }
+        /* Karta w ręce - position relative, nie absolute */
+        .karta.in-hand {
+            position: relative;
+            cursor: pointer;
+            top: 0 !important;
+            flex-shrink: 0;
+        }
+        /* Karta w pick-menu - position relative */
+        .karta.in-pick {
+            position: relative;
+            cursor: pointer;
+            top: 0 !important;
+        }
+        /* Karta w reveal - position relative */
+        .karta.in-reveal {
+            position: relative;
+            top: 0 !important;
+            display: inline-block;
+            margin: 2px;
+        }
 
-        /* Karta podświetlona/wybrana - wysuwa się do góry */
         .karta.selected {
-            transform: translateY(-30px) !important;
+            transform: translateY(-22px) !important;
             border: 3px solid var(--gold) !important;
             box-shadow: 0 0 18px var(--gold) !important;
             z-index: 10;
         }
+        /* in-hand selected - wysuwa w górę (translateY jest negatywny = w górę) */
+        .karta.in-hand.selected {
+            transform: translateY(-22px) !important;
+        }
 
         .karta .val { position: absolute; top: 5px; left: 8px; font-weight: 900; font-size: 1.3rem; line-height: 1; }
         .karta .suit { position: absolute; top: 25px; left: 8px; font-size: 1rem; }
-        .karta .val-br { position: absolute; bottom: 5px; right: 8px; font-weight: 900; font-size: 1.3rem; line-height: 1; transform: rotate(180deg); }
+        .karta .val-br { position: absolute; bottom: 5px; right: 8px; font-weight: 900; font-size: 1.1rem; transform: rotate(180deg); }
         .karta.red { color: var(--danger); }
         .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border: 1px solid white; }
 
-        /* Kaskadowe układanie na stole */
-        .card-stack .karta:nth-child(2) { top: 30px; }
-        .card-stack .karta:nth-child(3) { top: 60px; }
-        .card-stack .karta:nth-child(4) { top: 90px; }
-        .card-stack .karta:nth-child(5) { top: 120px; }
+        /* Kaskadowe układanie kart na stole */
+        .card-stack .karta:nth-child(2) { top: 0px; }
+        .card-stack .karta:nth-child(3) { top: 25px; }
+        .card-stack .karta:nth-child(4) { top: 50px; }
+        .card-stack .karta:nth-child(5) { top: 75px; }
+        .card-stack .karta:nth-child(6) { top: 100px; }
 
         #bottom-panel { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; width: 90%; padding: 10px; margin-top: auto; position: relative; }
         #sks-panel { display: none; background: rgba(0,0,0,0.7); border: 3px solid var(--gold); padding: 20px; border-radius: 15px; text-align: center; width: 200px; flex-shrink: 0; }
-        #reka-container { flex-grow: 1; text-align: center; }
-        #reka { display: flex; gap: 10px; padding: 20px 10px 10px; flex-wrap: wrap; justify-content: center; min-height: 180px; align-items: flex-end; }
-        /* Karty w ręce mają position: relative żeby selected działało */
-        #reka .karta { position: relative; cursor: pointer; top: 0 !important; flex-shrink: 0; }
 
-        /* Pasek info o wyborze combo */
+        #reka-container { flex-grow: 1; text-align: center; }
+        #reka { display: flex; gap: 12px; padding: 30px 10px 10px; flex-wrap: wrap; justify-content: center; min-height: 180px; align-items: flex-end; }
+
         #combo-info {
             background: rgba(241,196,15,0.15); border: 1px solid var(--gold); border-radius: 8px;
             padding: 6px 16px; font-size: 0.85rem; color: var(--gold); margin-bottom: 6px;
@@ -76,456 +100,422 @@
         #pick-menu {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: #1a1a2e; border: 4px solid var(--gold); padding: 30px; border-radius: 20px;
-            z-index: 9999; width: auto; min-width: 400px; max-width: 90vw; text-align: center;
+            z-index: 9999; min-width: 400px; max-width: 90vw; text-align: center;
             box-shadow: 0 0 50px rgba(0,0,0,0.9);
         }
-        #pick-cards-grid { display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 20px; min-height: 150px; }
-        #pick-cards-grid .karta { position: relative; top: 0 !important; cursor: pointer; }
+        #pick-cards-grid {
+            display: flex; gap: 12px; justify-content: center; align-items: flex-end;
+            flex-wrap: wrap; margin-top: 20px; min-height: 150px;
+        }
 
         #target-menu {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: #1a1a2e; border: 3px solid var(--gold); padding: 30px; border-radius: 20px;
             z-index: 9999; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8); min-width: 300px;
         }
-        #timer-box { font-size: 1.5rem; color: var(--gold); font-weight: bold; min-height: 2rem; }
+        #timer-box { font-size: 1.4rem; color: var(--gold); font-weight: bold; min-height: 2rem; }
 
-        .reveal-row { display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; align-items: flex-start; margin-top: 10px; }
+        .reveal-row { display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; align-items: flex-start; padding: 10px; }
         .reveal-player { text-align: center; }
-        .reveal-player .karta { position: relative; display: inline-block; margin: 2px; }
-        .reveal-player h4 { margin: 0 0 5px; color: var(--gold); }
-        .reveal-power { font-size: 1.2rem; font-weight: bold; margin-top: 5px; }
+        .reveal-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+        .reveal-player h4 { margin: 0 0 6px; color: var(--gold); }
+        .reveal-power { font-size: 1.1rem; font-weight: bold; margin-top: 8px; }
     </style>
 </head>
 <body>
-    <div id="sidebar">
-        <h2>👥 GRACZE</h2>
-        <div id="player-list"></div>
-    </div>
+<div id="sidebar">
+    <h2>👥 GRACZE</h2>
+    <div id="player-list"></div>
+</div>
 
-    <div id="game-area">
-        <button class="btn-reset" onclick="socket.emit('start-game')">NOWA GRA (RESET)</button>
-        <h1 style="margin: 0 0 4px;">⚔️ MACHNOWIAK 2.0</h1>
-        <div id="timer-box"></div>
-        <h2 id="status" style="color:var(--gold); height: 30px; margin: 4px 0;"></h2>
-        <div id="stół"></div>
+<div id="game-area">
+    <button class="btn-reset" onclick="socket.emit('start-game')">NOWA GRA (RESET)</button>
+    <h1 style="margin: 0 0 4px;">⚔️ MACHNOWIAK 2.0</h1>
+    <div id="timer-box"></div>
+    <h2 id="status" style="color:var(--gold); height: 30px; margin: 4px 0;"></h2>
+    <div id="stół"></div>
 
-        <div id="bottom-panel">
-            <div id="sks-panel">
-                <h3>🔥 UŻYĆ SKS?</h3>
-                <div style="display:flex; gap:10px; justify-content:center;">
-                    <button style="background:var(--gold)" onclick="sendSks(true)">TAK</button>
-                    <button style="background:#444; color:white;" onclick="sendSks(false)">NIE</button>
-                </div>
-            </div>
-
-            <div id="reka-container">
-                <div class="main-actions">
-                    <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')">START GRY</button>
-                    <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
-                    <button id="play-btn" class="btn-play" onclick="submitCombo()" style="display:none;">ZAGRAJ ▶</button>
-                    <button id="cancel-btn" class="btn-cancel" onclick="cancelCombo()" style="display:none;">✕ ANULUJ</button>
-                </div>
-                <div id="combo-info"></div>
-                <h3 style="margin: 0 0 4px;">TWOJA RĘKA:</h3>
-                <div id="reka"></div>
+    <div id="bottom-panel">
+        <div id="sks-panel">
+            <h3>🔥 UŻYĆ SKS?</h3>
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button style="background:var(--gold);color:#222;" onclick="sendSks(true)">TAK</button>
+                <button style="background:#444; color:white;" onclick="sendSks(false)">NIE</button>
             </div>
         </div>
 
-        <div id="pick-menu">
-            <h3 id="pick-title" style="font-size: 1.5rem; color: var(--gold); margin-top: 0;"></h3>
-            <div id="pick-cards-grid"></div>
-        </div>
-
-        <div id="target-menu">
-            <h3 style="color: var(--gold); margin-top: 0;">🎯 Wybierz cel dla ósemki:</h3>
-            <div id="target-list" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"></div>
+        <div id="reka-container">
+            <div class="main-actions">
+                <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')">START GRY</button>
+                <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
+                <button id="play-btn" class="btn-play" onclick="submitCombo()" style="display:none;">ZAGRAJ ▶</button>
+                <button id="cancel-btn" class="btn-cancel" onclick="cancelCombo()" style="display:none;">✕ ANULUJ</button>
+            </div>
+            <div id="combo-info"></div>
+            <h3 style="margin: 0 0 4px;">TWOJA RĘKA:</h3>
+            <div id="reka"></div>
         </div>
     </div>
 
-    <script>
-        const socket = io();
+    <div id="pick-menu">
+        <h3 id="pick-title" style="font-size: 1.4rem; color: var(--gold); margin-top: 0;"></h3>
+        <div id="pick-cards-grid"></div>
+    </div>
 
-        // Stan combo po stronie klienta
-        let myHand = [];
-        let selectedCards = [];   // karty wybrane do combo
-        let comboMode = null;     // null | 'normal' | 'with2' | 'with8' | 'joker'
-        let isMyTurn = false;
-        let pendingTarget = null; // cel dla ósemki (gdy jest w combo)
+    <div id="target-menu">
+        <h3 style="color: var(--gold); margin-top: 0;">🎯 Wybierz cel dla ósemki:</h3>
+        <div id="target-list" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;"></div>
+    </div>
+</div>
 
-        window.onload = () => {
-            const nick = prompt("Twój Nick:");
-            if (nick) socket.emit('join', nick);
-        };
+<script>
+    const socket = io();
 
-        // ── AKTUALIZACJE OD SERWERA ──────────────────────────────────────────
+    // ── STAN GLOBALNY ─────────────────────────────────────────────────────────
+    let myNick = null;
+    let myHand = [];
+    let selectedCards = [];  // { value, suit, _idx }
+    let isMyTurn = false;
 
-        socket.on('update-player-list', list => {
-            document.getElementById('player-list').innerHTML = list.map(p => `
-                <div class="player-card ${p.isCurrent ? 'active' : ''}">
-                    <strong>${p.name}</strong><br>Karty: ${p.count} ${p.sksUsed ? '🚫' : ''}
-                </div>
-            `).join('');
-        });
+    // ── INICJALIZACJA ─────────────────────────────────────────────────────────
+    // JEDEN window.onload - wcześniej był zdefiniowany DWIE RAZY co powodowało
+    // że myNick nigdy nie był ustawiony i isMyTurn zawsze był false
+    window.onload = () => {
+        myNick = prompt("Twój Nick:");
+        if (myNick) socket.emit('join', myNick);
+    };
 
-        socket.on('update-table-hidden', data => {
-            const stol = document.getElementById('stół');
-            stol.innerHTML = '';
-            data.forEach(p => {
-                const stack = document.createElement('div');
-                stack.className = 'card-stack';
-                stack.innerHTML = `<div class="stack-info">${p.playerName}</div>`;
+    // ── EVENTY OD SERWERA ─────────────────────────────────────────────────────
 
-                if (p.cards && p.cards.length > 0) {
-                    p.cards.forEach(c => stack.appendChild(createCardEl(c, false)));
-                } else {
-                    const rev = document.createElement('div');
-                    rev.className = 'karta zakryta';
-                    stack.appendChild(rev);
-                }
-                stol.appendChild(stack);
-            });
-        });
+    // JEDEN handler update-player-list (wcześniej były DWIE rejestracje - druga nadpisywała pierwszą)
+    socket.on('update-player-list', list => {
+        // Renderuj listę
+        document.getElementById('player-list').innerHTML = list.map(p => `
+            <div class="player-card ${p.isCurrent ? 'active' : ''}">
+                <strong>${p.name}</strong><br>Karty: ${p.count} ${p.sksUsed ? '🚫' : ''}
+            </div>
+        `).join('');
 
-        socket.on('init-hand', hand => {
-            myHand = hand;
-            selectedCards = [];
-            comboMode = null;
-            pendingTarget = null;
-            renderHand();
-            updateComboInfo();
-        });
-
-        socket.on('update-status', msg => document.getElementById('status').innerText = msg);
-
-        socket.on('clear-table', () => {
-            document.getElementById('stół').innerHTML = '';
-        });
-
-        socket.on('game-begun', () => {
-            document.getElementById('start-btn').style.display = 'none';
-            isMyTurn = false;
-        });
-
-        // Serwer mówi: teraz Twoja tura – odblokuj możliwość grania
-        // Sprawdzamy to przez update-status zaczyna: lub "Tura: TWÓJ NICK"
-        socket.on('update-status', msg => {
-            // Sprawdzamy czy to nasza tura (serwer wysyła "Tura: Nick" lub "ZACZYNA: Nick")
-            // isMyTurn jest ustawiany przez serwer pośrednio – sprawdzamy w play-combo error
-        });
-
-        socket.on('error-msg', msg => {
-            isMyTurn = false;
-            cancelCombo();
-            alert(msg);
-        });
-
-        // Serwer wysyła czy to nasza tura przez player-list (isCurrent)
-        socket.on('update-player-list', list => {
-            const myId = socket.id;
-            // Szukamy siebie po ID – serwer nie wysyła ID, więc szukamy po nazwie
-            // Alternatywnie: serwer mógłby wysłać osobny event, ale użyjemy triku:
-            // Jeśli karta aktywna to ta sama co nasza (matchujemy po nazwie w title)
-            // Prostsze: zapamiętujemy nasz nick i szukamy w liście
-            if (myNick) {
-                const me = list.find(p => p.name === myNick);
-                const wasMyTurn = isMyTurn;
-                isMyTurn = me ? me.isCurrent : false;
-                if (isMyTurn && !wasMyTurn) {
-                    // Tura się zmieniła na nas – odblokuj
-                    renderHand();
-                }
-            }
-        });
-
-        socket.on('update-timer', time => {
-            document.getElementById('timer-box').innerText = time > 0 ? `⏱ KONIEC RUNDY ZA: ${time}s` : '';
-        });
-
-        socket.on('reveal-blef-anim', data => {
-            const stol = document.getElementById('stół');
-            stol.innerHTML = `<h2 style="color:var(--danger); position:absolute; top:10px;">${data.player} MIAŁ:</h2>`;
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'display:flex; gap:10px; align-items:center;';
-            data.cards.forEach(c => wrap.appendChild(createCardEl(c, false)));
-            stol.appendChild(wrap);
-        });
-
-        socket.on('reveal-detailed', results => {
-            const stol = document.getElementById('stół');
-            stol.innerHTML = '';
-            const row = document.createElement('div');
-            row.className = 'reveal-row';
-            results.forEach(r => {
-                const div = document.createElement('div');
-                div.className = 'reveal-player';
-                div.innerHTML = `<h4>${r.name}</h4>`;
-                const cardsRow = document.createElement('div');
-                cardsRow.style.cssText = 'display:flex; gap:6px; justify-content:center; position:relative; min-height:130px;';
-                r.cards.forEach((c, i) => {
-                    const el = createCardEl(c, false);
-                    el.style.position = 'relative';
-                    el.style.top = '0';
-                    cardsRow.appendChild(el);
-                });
-                div.appendChild(cardsRow);
-                div.innerHTML += `<div class="reveal-power">${r.finalPower} pkt</div>`;
-                row.appendChild(div);
-            });
-            stol.appendChild(row);
-        });
-
-        socket.on('show-sks-modal', () => {
-            isMyTurn = false;
-            cancelCombo();
-            document.getElementById('sks-panel').style.display = 'block';
-        });
-
-        socket.on('show-pick-menu', data => {
-            const menu = document.getElementById('pick-menu');
-            const grid = document.getElementById('pick-cards-grid');
-            document.getElementById('pick-title').innerText = data.title;
-            menu.style.display = 'block';
-            grid.innerHTML = '';
-            let selectedPick = [];
-            data.pool.forEach(k => {
-                const d = createCardEl(k, false);
-                d.style.cursor = 'pointer';
-                d.onclick = () => {
-                    if (d.classList.contains('selected')) return;
-                    d.classList.add('selected');
-                    selectedPick.push(k);
-                    if (selectedPick.length === data.count) {
-                        socket.emit('pick-cards', { cards: selectedPick, targetIdx: data.targetIdx });
-                        menu.style.display = 'none';
-                    }
-                };
-                grid.appendChild(d);
-            });
-        });
-
-        socket.on('show-target-menu', targets => {
-            showTargetMenu(targets, (t) => {
-                socket.emit('target-selected', t);
-            });
-        });
-
-        socket.on('reset-client-ui', () => {
-            myHand = [];
-            selectedCards = [];
-            comboMode = null;
-            isMyTurn = false;
-            document.getElementById('reka').innerHTML = '';
-            document.getElementById('stół').innerHTML = '';
-            document.getElementById('status').innerText = '';
-            document.getElementById('timer-box').innerText = '';
-            document.getElementById('sks-panel').style.display = 'none';
-            document.getElementById('start-btn').style.display = '';
-            updateComboInfo();
-        });
-
-        // ── LOGIKA COMBO PO STRONIE KLIENTA ──────────────────────────────────
-
-        let myNick = null;
-
-        window.onload = () => {
-            myNick = prompt("Twój Nick:");
-            if (myNick) socket.emit('join', myNick);
-        };
-
-        function renderHand() {
-            const reka = document.getElementById('reka');
-            reka.innerHTML = '';
-
-            myHand.forEach((k, i) => {
-                const div = createCardEl(k, true);
-
-                // Sprawdź czy ta karta jest w selectedCards
-                const isSelected = selectedCards.some(s => s.value === k.value && s.suit === k.suit && s._idx === i);
-                if (isSelected) div.classList.add('selected');
-
-                div.onclick = () => handleCardClick(k, i, div);
-                reka.appendChild(div);
-            });
-
-            // Pokaż/ukryj przyciski
-            document.getElementById('play-btn').style.display = selectedCards.length > 0 && isMyTurn ? 'inline-block' : 'none';
-            document.getElementById('cancel-btn').style.display = selectedCards.length > 0 ? 'inline-block' : 'none';
-            updateComboInfo();
-        }
-
-        function handleCardClick(card, idx, el) {
-            if (!isMyTurn) return;
-
-            const cardWithIdx = { ...card, _idx: idx };
-
-            // Czy karta jest już wybrana?
-            const selIdx = selectedCards.findIndex(s => s._idx === idx);
-            if (selIdx !== -1) {
-                // Odznacz
-                selectedCards.splice(selIdx, 1);
-                el.classList.remove('selected');
-                updateComboInfo();
+        // Sprawdź czy to nasza tura
+        if (myNick) {
+            const me = list.find(p => p.name === myNick);
+            const wasMyTurn = isMyTurn;
+            isMyTurn = me ? me.isCurrent : false;
+            if (isMyTurn && !wasMyTurn) {
+                // Właśnie stała się nasza tura - odśwież rękę
                 renderHand();
-                return;
             }
-
-            const isFunctional = ['2', '8', 'Joker'].includes(card.value);
-            const hasJoker = selectedCards.some(s => s.value === 'Joker');
-            const hasEight = selectedCards.some(s => s.value === '8');
-            const hasTwo = selectedCards.some(s => s.value === '2');
-            const hasNormal = selectedCards.some(s => !['2', '8', 'Joker'].includes(s.value));
-
-            // Zasady wyboru:
-            // 1. Joker: można wybrać Jokera + jedną dowolną kartę (2 karty łącznie)
-            // 2. "2" (podwajacz): wybierasz 2, potem jedną kartę normalną (lub inną funkcyjną?)
-            //    Zasada: 2 + karta bazowa
-            // 3. "8": wybierasz 8 + potem jeden gracz jako cel (przez menu)
-            //    Można też zagrać samą 8
-            // 4. Normalna karta: gra się pojedynczo
-
-            if (selectedCards.length === 0) {
-                // Pierwsza karta
-                selectedCards.push(cardWithIdx);
-                el.classList.add('selected');
-            } else if (hasJoker) {
-                // Joker jest wybrany - dodaj drugą kartę (dowolną)
-                if (selectedCards.length < 2) {
-                    selectedCards.push(cardWithIdx);
-                    el.classList.add('selected');
-                }
-            } else if (hasTwo && !hasNormal && card.value !== '2' && card.value !== 'Joker') {
-                // "2" jest wybrane - dodaj kartę bazową (nie Jokera, nie kolejnej 2)
-                if (selectedCards.length < 2) {
-                    selectedCards.push(cardWithIdx);
-                    el.classList.add('selected');
-                }
-            } else if (hasEight && !hasNormal && !hasTwo && !['8', 'Joker', '2'].includes(card.value)) {
-                // "8" wybrana - można dodać kartę bazową jako combo (ale 8 wymaga celu, nie drugiej karty)
-                // Zasada gry: 8 gra się solo (cel wybiera się przez menu)
-                // Więc nie dodajemy drugiej karty przy 8
-            } else if (card.value === 'Joker' && selectedCards.length === 1 && !hasJoker) {
-                // Dodajemy Jokera jako drugą kartę do istniejącego combo
-                selectedCards.push(cardWithIdx);
-                el.classList.add('selected');
-            } else if (selectedCards.length === 0) {
-                selectedCards.push(cardWithIdx);
-                el.classList.add('selected');
-            }
-
-            updateComboInfo();
-            renderHand();
         }
+    });
 
-        function updateComboInfo() {
-            const info = document.getElementById('combo-info');
-            if (selectedCards.length === 0) {
-                info.innerText = isMyTurn ? '👆 Kliknij kartę aby ją wybrać' : '';
-                return;
-            }
+    // JEDEN handler update-status
+    socket.on('update-status', msg => {
+        document.getElementById('status').innerText = msg;
+    });
 
-            const hasJoker = selectedCards.some(s => s.value === 'Joker');
-            const hasTwo = selectedCards.some(s => s.value === '2');
-            const hasEight = selectedCards.some(s => s.value === '8');
+    socket.on('init-hand', hand => {
+        myHand = hand;
+        selectedCards = [];
+        renderHand();
+    });
 
-            let msg = `Wybrano: ${selectedCards.map(c => `${c.value}${c.value === 'Joker' ? '🃏' : c.suit}`).join(' + ')}`;
+    socket.on('clear-table', () => {
+        document.getElementById('stół').innerHTML = '';
+    });
 
-            if (hasJoker && selectedCards.length < 2) {
-                msg += ' — wybierz jeszcze jedną kartę (Joker pozwala zagrać 2 karty)';
-            } else if (hasTwo && selectedCards.length < 2) {
-                msg += ' — wybierz kartę bazową do podwojenia';
-            } else if (hasEight) {
-                msg += ' — po zagraniu wybierzesz cel dla ósemki';
-            }
+    socket.on('game-begun', () => {
+        document.getElementById('start-btn').style.display = 'none';
+        isMyTurn = false;
+    });
 
-            info.innerText = msg;
-            document.getElementById('play-btn').style.display = selectedCards.length > 0 && isMyTurn ? 'inline-block' : 'none';
-            document.getElementById('cancel-btn').style.display = selectedCards.length > 0 ? 'inline-block' : 'none';
-        }
+    socket.on('update-timer', time => {
+        document.getElementById('timer-box').innerText = time > 0 ? `⏱ KONIEC RUNDY ZA: ${time}s` : '';
+    });
 
-        function submitCombo() {
-            if (!isMyTurn || selectedCards.length === 0) return;
+    socket.on('error-msg', msg => {
+        isMyTurn = false;
+        cancelCombo();
+        alert(msg);
+    });
 
-            const hasJoker = selectedCards.some(s => s.value === 'Joker');
-            const hasTwo = selectedCards.some(s => s.value === '2');
-            const hasEight = selectedCards.some(s => s.value === '8');
-
-            // Walidacja wymaganej liczby kart
-            if (hasJoker && selectedCards.length < 2) {
-                alert('Joker wymaga wybrania drugiej karty!');
-                return;
-            }
-            if (hasTwo && selectedCards.length < 2) {
-                alert('"2" wymaga wybrania karty bazowej!');
-                return;
-            }
-
-            // Czyste karty bez pomocniczego _idx
-            const cleanCards = selectedCards.map(({ _idx, ...card }) => card);
-
-            if (hasEight) {
-                // Pokaż menu wyboru celu, potem wyślij
-                const targets = []; // Pobierzemy listę z player-list
-                const playerDivs = document.querySelectorAll('#player-list .player-card strong');
-                playerDivs.forEach(d => {
-                    if (d.innerText !== myNick) targets.push(d.innerText);
-                });
-                showTargetMenu(targets, (target) => {
-                    isMyTurn = false;
-                    socket.emit('play-combo', { cards: cleanCards, target });
-                    cancelCombo();
-                });
+    socket.on('update-table-hidden', data => {
+        const stol = document.getElementById('stół');
+        stol.innerHTML = '';
+        data.forEach(p => {
+            const stack = document.createElement('div');
+            stack.className = 'card-stack';
+            stack.innerHTML = `<div class="stack-info">${p.playerName}</div>`;
+            if (p.cards && p.cards.length > 0) {
+                p.cards.forEach(c => stack.appendChild(makeCard(c)));
             } else {
-                isMyTurn = false;
-                socket.emit('play-combo', { cards: cleanCards, target: null });
-                cancelCombo();
+                const rev = document.createElement('div');
+                rev.className = 'karta zakryta';
+                stack.appendChild(rev);
             }
-        }
+            stol.appendChild(stack);
+        });
+    });
 
-        function cancelCombo() {
-            selectedCards = [];
-            document.getElementById('play-btn').style.display = 'none';
-            document.getElementById('cancel-btn').style.display = 'none';
-            renderHand();
-            updateComboInfo();
-        }
+    socket.on('reveal-blef-anim', data => {
+        const stol = document.getElementById('stół');
+        stol.innerHTML = `<h2 style="color:var(--danger);position:absolute;top:10px;">🚨 ${data.player} MIAŁ:</h2>`;
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;gap:10px;align-items:center;margin-top:40px;';
+        data.cards.forEach(c => {
+            const el = makeCard(c);
+            el.classList.add('in-reveal');
+            wrap.appendChild(el);
+        });
+        stol.appendChild(wrap);
+    });
 
-        function showTargetMenu(targets, callback) {
-            const menu = document.getElementById('target-menu');
-            const list = document.getElementById('target-list');
-            menu.style.display = 'block';
-            list.innerHTML = '';
-            targets.forEach(t => {
-                const b = document.createElement('button');
-                b.innerText = t;
-                b.className = 'btn-start';
-                b.style.margin = '5px';
-                b.onclick = () => {
-                    menu.style.display = 'none';
-                    callback(t);
-                };
-                list.appendChild(b);
-            });
-        }
-
-        function sendSks(decision) {
-            socket.emit('sks-decision', decision);
-            document.getElementById('sks-panel').style.display = 'none';
-        }
-
-        // ── HELPER ───────────────────────────────────────────────────────────
-
-        function createCardEl(k, clickable) {
+    socket.on('reveal-detailed', results => {
+        const stol = document.getElementById('stół');
+        stol.innerHTML = '';
+        const row = document.createElement('div');
+        row.className = 'reveal-row';
+        results.forEach(r => {
             const div = document.createElement('div');
-            const isRed = k.suit === '♥' || k.suit === '♦';
-            div.className = `karta ${isRed ? 'red' : ''}`;
-            if (k.value === 'Joker') {
-                div.innerHTML = `<span class="val">🃏</span><span class="suit">Joker</span>`;
-            } else {
-                div.innerHTML = `<span class="val">${k.value}</span><span class="suit">${k.suit}</span><span class="val-br">${k.value}</span>`;
-            }
-            if (clickable) div.style.cursor = 'pointer';
-            return div;
+            div.className = 'reveal-player';
+            div.innerHTML = `<h4>${r.name}</h4>`;
+            const cardsRow = document.createElement('div');
+            cardsRow.className = 'reveal-cards';
+            r.cards.forEach(c => {
+                const el = makeCard(c);
+                el.classList.add('in-reveal');
+                cardsRow.appendChild(el);
+            });
+            div.appendChild(cardsRow);
+            const pwr = document.createElement('div');
+            pwr.className = 'reveal-power';
+            pwr.innerText = `${r.finalPower} pkt`;
+            div.appendChild(pwr);
+            row.appendChild(div);
+        });
+        stol.appendChild(row);
+    });
+
+    socket.on('show-sks-modal', () => {
+        isMyTurn = false;
+        cancelCombo();
+        document.getElementById('sks-panel').style.display = 'block';
+    });
+
+    socket.on('show-pick-menu', data => {
+        const menu = document.getElementById('pick-menu');
+        const grid = document.getElementById('pick-cards-grid');
+        document.getElementById('pick-title').innerText = data.title;
+        grid.innerHTML = '';
+        let picked = [];
+
+        data.pool.forEach(k => {
+            const el = makeCard(k);
+            el.classList.add('in-pick');  // position: relative, nie nakłada się
+            el.onclick = () => {
+                if (el.classList.contains('selected')) return;
+                el.classList.add('selected');
+                picked.push(k);
+                if (picked.length === data.count) {
+                    socket.emit('pick-cards', { cards: picked, targetIdx: data.targetIdx });
+                    menu.style.display = 'none';
+                }
+            };
+            grid.appendChild(el);
+        });
+
+        menu.style.display = 'block';
+    });
+
+    socket.on('show-target-menu', targets => {
+        openTargetMenu(targets, t => socket.emit('target-selected', t));
+    });
+
+    socket.on('reset-client-ui', () => {
+        myHand = [];
+        selectedCards = [];
+        isMyTurn = false;
+        document.getElementById('reka').innerHTML = '';
+        document.getElementById('stół').innerHTML = '';
+        document.getElementById('status').innerText = '';
+        document.getElementById('timer-box').innerText = '';
+        document.getElementById('sks-panel').style.display = 'none';
+        document.getElementById('start-btn').style.display = 'inline-block';
+        document.getElementById('play-btn').style.display = 'none';
+        document.getElementById('cancel-btn').style.display = 'none';
+        document.getElementById('combo-info').innerText = '';
+    });
+
+    // ── RENDEROWANIE RĘKI ─────────────────────────────────────────────────────
+
+    function renderHand() {
+        const reka = document.getElementById('reka');
+        reka.innerHTML = '';
+
+        myHand.forEach((k, i) => {
+            const el = makeCard(k);
+            el.classList.add('in-hand');
+
+            const isSel = selectedCards.some(s => s._idx === i);
+            if (isSel) el.classList.add('selected');
+
+            el.onclick = () => handleCardClick(k, i, el);
+            reka.appendChild(el);
+        });
+
+        refreshActionButtons();
+    }
+
+    function refreshActionButtons() {
+        const hasSelected = selectedCards.length > 0;
+        document.getElementById('play-btn').style.display = (hasSelected && isMyTurn) ? 'inline-block' : 'none';
+        document.getElementById('cancel-btn').style.display = hasSelected ? 'inline-block' : 'none';
+
+        // Info pod ręką
+        const info = document.getElementById('combo-info');
+        if (!isMyTurn) { info.innerText = ''; return; }
+        if (selectedCards.length === 0) { info.innerText = '👆 Kliknij kartę aby ją wybrać'; return; }
+
+        const hasJoker = selectedCards.some(s => s.value === 'Joker');
+        const hasTwo   = selectedCards.some(s => s.value === '2');
+        const hasEight = selectedCards.some(s => s.value === '8');
+
+        const names = selectedCards.map(c => c.value === 'Joker' ? '🃏' : `${c.value}${c.suit}`).join(' + ');
+        let hint = `Wybrano: ${names}`;
+
+        if (hasJoker && selectedCards.length < 2) hint += ' — wybierz drugą kartę';
+        else if (hasTwo && selectedCards.length < 2) hint += ' — wybierz kartę do podwojenia';
+        else if (hasEight) hint += ' — po zagraniu wybierzesz cel';
+
+        info.innerText = hint;
+    }
+
+    // ── LOGIKA WYBORU KART ────────────────────────────────────────────────────
+
+    function handleCardClick(card, idx, el) {
+        if (!isMyTurn) return;
+
+        // Odznaczanie
+        const selIdx = selectedCards.findIndex(s => s._idx === idx);
+        if (selIdx !== -1) {
+            selectedCards.splice(selIdx, 1);
+            renderHand();
+            return;
         }
-    </script>
+
+        // Zasady dodawania do combo:
+        const hasJoker  = selectedCards.some(s => s.value === 'Joker');
+        const hasTwo    = selectedCards.some(s => s.value === '2');
+        const hasEight  = selectedCards.some(s => s.value === '8');
+        const hasNormal = selectedCards.some(s => !['2', '8', 'Joker'].includes(s.value));
+
+        let canAdd = false;
+
+        if (selectedCards.length === 0) {
+            // Pierwsza karta - zawsze można wybrać
+            canAdd = true;
+
+        } else if (hasJoker && selectedCards.length < 2) {
+            // Joker wybrany - dodaj dowolną drugą kartę
+            canAdd = true;
+
+        } else if (card.value === 'Joker' && selectedCards.length === 1 && !hasJoker) {
+            // Dodajesz Jokera jako drugą kartę do istniejącej
+            canAdd = true;
+
+        } else if (hasTwo && selectedCards.length < 2 && card.value !== '2' && card.value !== 'Joker') {
+            // "2" wybrane - dodaj kartę bazową (nie kolejną 2, nie Jokera)
+            canAdd = true;
+
+        }
+        // "8" gra się solo - cel wybierany przez menu, nie przez drugą kartę
+        // Normalna karta gra się solo
+
+        if (canAdd) {
+            selectedCards.push({ ...card, _idx: idx });
+        }
+
+        renderHand();
+    }
+
+    // ── ZAGRANIE COMBO ────────────────────────────────────────────────────────
+
+    function submitCombo() {
+        if (!isMyTurn || selectedCards.length === 0) return;
+
+        const hasJoker = selectedCards.some(s => s.value === 'Joker');
+        const hasTwo   = selectedCards.some(s => s.value === '2');
+        const hasEight = selectedCards.some(s => s.value === '8');
+
+        if (hasJoker && selectedCards.length < 2) {
+            alert('Joker wymaga wybrania drugiej karty!'); return;
+        }
+        if (hasTwo && selectedCards.length < 2) {
+            alert('"2" wymaga wybrania karty bazowej!'); return;
+        }
+
+        // Usuń pomocniczy _idx przed wysłaniem
+        const cleanCards = selectedCards.map(({ _idx, ...card }) => card);
+
+        if (hasEight) {
+            // Zbierz listę innych graczy z sidebara
+            const targets = [];
+            document.querySelectorAll('#player-list .player-card strong').forEach(el => {
+                if (el.innerText !== myNick) targets.push(el.innerText);
+            });
+            openTargetMenu(targets, target => {
+                isMyTurn = false;
+                socket.emit('play-combo', { cards: cleanCards, target });
+                cancelCombo();
+            });
+        } else {
+            isMyTurn = false;
+            socket.emit('play-combo', { cards: cleanCards, target: null });
+            cancelCombo();
+        }
+    }
+
+    function cancelCombo() {
+        selectedCards = [];
+        renderHand();
+    }
+
+    // ── MENU WYBORU CELU (ósemka) ─────────────────────────────────────────────
+
+    function openTargetMenu(targets, callback) {
+        const menu = document.getElementById('target-menu');
+        const list = document.getElementById('target-list');
+        list.innerHTML = '';
+        targets.forEach(t => {
+            const b = document.createElement('button');
+            b.innerText = t;
+            b.className = 'btn-start';
+            b.style.margin = '5px';
+            b.onclick = () => { menu.style.display = 'none'; callback(t); };
+            list.appendChild(b);
+        });
+        menu.style.display = 'block';
+    }
+
+    // ── SKS ───────────────────────────────────────────────────────────────────
+
+    function sendSks(decision) {
+        socket.emit('sks-decision', decision);
+        document.getElementById('sks-panel').style.display = 'none';
+    }
+
+    // ── TWORZENIE ELEMENTU KARTY ──────────────────────────────────────────────
+
+    function makeCard(k) {
+        const div = document.createElement('div');
+        const isRed = k.suit === '♥' || k.suit === '♦';
+        div.className = `karta${isRed ? ' red' : ''}`;
+        if (k.value === 'Joker') {
+            div.innerHTML = `<span class="val">🃏</span><span class="suit">Joker</span>`;
+        } else {
+            div.innerHTML = `<span class="val">${k.value}</span><span class="suit">${k.suit}</span><span class="val-br">${k.value}</span>`;
+        }
+        return div;
+    }
+</script>
 </body>
 </html>
