@@ -9,138 +9,173 @@
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
 
-        #sidebar { width: 220px; background: rgba(0,0,0,0.8); border-right: 2px solid var(--accent); padding: 20px; display: flex; flex-direction: column; flex-shrink: 0; }
-        .player-card { background: rgba(255,255,255,0.05); padding: 10px; margin: 5px 0; border-radius: 8px; border-left: 4px solid transparent; transition: 0.3s; }
+        #sidebar { width: 200px; background: rgba(0,0,0,0.8); border-right: 2px solid var(--accent); padding: 16px; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+        .player-card { background: rgba(255,255,255,0.05); padding: 8px 10px; margin: 4px 0; border-radius: 8px; border-left: 4px solid transparent; transition: 0.3s; font-size: 0.88rem; }
         .player-card.active { border-left-color: var(--gold); background: rgba(241,196,15,0.1); }
 
-        #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 20px; position: relative; overflow: hidden; }
+        #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 16px; position: relative; overflow: hidden; }
 
         #stół {
-            background: rgba(255,255,255,0.03); width: 95%; height: 420px; border-radius: 30px;
+            background: rgba(255,255,255,0.03); width: 95%; flex-shrink: 0;
+            height: 340px; border-radius: 24px;
             border: 2px dashed #444; display: flex; justify-content: center; align-items: flex-start;
-            gap: 60px; padding-top: 80px; position: relative; flex-shrink: 0;
+            gap: 40px; padding-top: 70px; position: relative;
         }
 
-        .card-stack { position: relative; width: 90px; height: 200px; }
-        .stack-info { position: absolute; top: -70px; width: 140px; left: 50%; transform: translateX(-50%); text-align: center; color: var(--gold); font-weight: bold; font-size: 0.9rem; }
+        .card-stack { position: relative; width: 80px; }
+        .stack-info { position: absolute; top: -55px; width: 120px; left: 50%; transform: translateX(-50%); text-align: center; color: var(--gold); font-weight: bold; font-size: 0.82rem; }
 
-        /* Bazowa karta - position absolute dla stosu na stole */
+        /* ── KARTA ── */
         .karta {
-            width: 90px; height: 130px; background: white; color: black; border-radius: 10px;
-            border: 2px solid #222; position: absolute; box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
+            width: 80px; height: 115px;
+            background: white; color: black; border-radius: 9px;
+            border: 2px solid #222;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.5);
             overflow: hidden;
-            transition: transform 0.2s ease-out, border-color 0.15s, box-shadow 0.15s;
+            transition: transform 0.18s ease-out, border-color 0.15s, box-shadow 0.15s;
+            /* domyślnie absolute (na stole/w stosie) */
+            position: absolute;
         }
-        /* Karta w ręce - position relative, nie absolute */
+        /* Kaskadowe przesunięcie kart w stosie - widać oznaczenia poprzednich */
+        .card-stack .karta:nth-child(2) { top: 0; }
+        .card-stack .karta:nth-child(3) { top: 22px; }
+        .card-stack .karta:nth-child(4) { top: 44px; }
+        .card-stack .karta:nth-child(5) { top: 66px; }
+        .card-stack .karta:nth-child(6) { top: 88px; }
+        .card-stack .karta:nth-child(7) { top: 110px; }
+
+        /* Karta w ręce */
         .karta.in-hand {
-            position: relative;
-            cursor: pointer;
-            top: 0 !important;
-            flex-shrink: 0;
+            position: relative; top: 0 !important;
+            cursor: pointer; flex-shrink: 0;
         }
-        /* Karta w pick-menu - position relative */
+        /* Karta w pick-menu */
         .karta.in-pick {
-            position: relative;
-            cursor: pointer;
-            top: 0 !important;
+            position: relative; top: 0 !important; cursor: pointer;
         }
-        /* Karta w reveal - position relative */
+        /* Karta w reveal */
         .karta.in-reveal {
-            position: relative;
-            top: 0 !important;
-            display: inline-block;
-            margin: 2px;
+            position: relative; top: 0 !important; display: inline-block; margin: 2px;
         }
 
         .karta.selected {
-            transform: translateY(-22px) !important;
+            transform: translateY(-20px) !important;
             border: 3px solid var(--gold) !important;
-            box-shadow: 0 0 18px var(--gold) !important;
-            z-index: 10;
-        }
-        /* in-hand selected - wysuwa w górę (translateY jest negatywny = w górę) */
-        .karta.in-hand.selected {
-            transform: translateY(-22px) !important;
+            box-shadow: 0 0 14px var(--gold) !important;
+            z-index: 20;
         }
 
-        .karta .val { position: absolute; top: 5px; left: 8px; font-weight: 900; font-size: 1.3rem; line-height: 1; }
-        .karta .suit { position: absolute; top: 25px; left: 8px; font-size: 1rem; }
-        .karta .val-br { position: absolute; bottom: 5px; right: 8px; font-weight: 900; font-size: 1.1rem; transform: rotate(180deg); }
+        .karta .val  { position: absolute; top: 4px; left: 6px; font-weight: 900; font-size: 1.15rem; line-height: 1; }
+        .karta .suit { position: absolute; top: 22px; left: 7px; font-size: 0.9rem; }
+        .karta .val-br { position: absolute; bottom: 4px; right: 6px; font-weight: 900; font-size: 1rem; transform: rotate(180deg); }
         .karta.red { color: var(--danger); }
-        .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border: 1px solid white; }
+        .karta.zakryta { background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%); color: transparent; border: 1px solid rgba(255,255,255,0.3); }
 
-        /* Kaskadowe układanie kart na stole */
-        .card-stack .karta:nth-child(2) { top: 0px; }
-        .card-stack .karta:nth-child(3) { top: 25px; }
-        .card-stack .karta:nth-child(4) { top: 50px; }
-        .card-stack .karta:nth-child(5) { top: 75px; }
-        .card-stack .karta:nth-child(6) { top: 100px; }
+        /* ── RĘKA ── */
+        #bottom-panel {
+            display: flex; align-items: flex-end; gap: 16px; width: 95%;
+            padding: 8px 0; margin-top: auto; position: relative; flex-shrink: 0;
+        }
+        #sks-panel {
+            /* Ustawiony PONAD ręką, nie obok - nie przesuwa kart */
+            position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+            background: rgba(10,8,30,0.95); border: 2px solid var(--gold);
+            padding: 14px 24px; border-radius: 14px; text-align: center;
+            white-space: nowrap; z-index: 100;
+            display: none;
+        }
+        #sks-panel h3 { margin: 0 0 10px; font-size: 1rem; }
 
-        #bottom-panel { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; width: 90%; padding: 10px; margin-top: auto; position: relative; }
-        #sks-panel { display: none; background: rgba(0,0,0,0.7); border: 3px solid var(--gold); padding: 20px; border-radius: 15px; text-align: center; width: 200px; flex-shrink: 0; }
+        #reka-container { flex-grow: 1; text-align: center; position: relative; }
+        #reka {
+            display: flex; gap: 6px; padding: 28px 6px 6px;
+            flex-wrap: wrap; justify-content: center;
+            min-height: 150px; align-items: flex-end;
+        }
 
-        #reka-container { flex-grow: 1; text-align: center; }
-        #reka { display: flex; gap: 12px; padding: 30px 10px 10px; flex-wrap: wrap; justify-content: center; min-height: 180px; align-items: flex-end; }
+        /* Gdy dużo kart - automatycznie zmniejsz */
+        #reka.many-cards .karta.in-hand {
+            width: 58px; height: 85px;
+        }
+        #reka.many-cards .karta.in-hand .val  { font-size: 0.85rem; top: 3px; left: 4px; }
+        #reka.many-cards .karta.in-hand .suit { font-size: 0.72rem; top: 16px; left: 5px; }
+        #reka.many-cards .karta.in-hand .val-br { font-size: 0.75rem; bottom: 3px; right: 4px; }
 
         #combo-info {
-            background: rgba(241,196,15,0.15); border: 1px solid var(--gold); border-radius: 8px;
-            padding: 6px 16px; font-size: 0.85rem; color: var(--gold); margin-bottom: 6px;
-            min-height: 28px; text-align: center;
+            background: rgba(241,196,15,0.12); border: 1px solid rgba(241,196,15,0.4); border-radius: 8px;
+            padding: 5px 14px; font-size: 0.82rem; color: var(--gold); margin-bottom: 5px;
+            min-height: 26px; text-align: center;
         }
 
-        .main-actions { position: absolute; top: -55px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; width: 100%; justify-content: center; }
-        button { padding: 12px 25px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.95rem; }
+        .main-actions {
+            position: absolute; top: -48px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; justify-content: center; width: 100%;
+        }
+        button { padding: 10px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.18s; font-size: 0.9rem; }
         button:hover { filter: brightness(1.15); }
-        .btn-start { background: #27ae60; color: white; }
-        .btn-blef { background: var(--danger); color: white; }
-        .btn-play { background: var(--gold); color: #222; }
-        .btn-cancel { background: #555; color: white; font-size: 0.8rem; padding: 8px 16px; }
-        .btn-reset { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; z-index: 1000; }
+        .btn-start  { background: #27ae60; color: white; }
+        .btn-blef   { background: var(--danger); color: white; }
+        .btn-play   { background: var(--gold); color: #222; }
+        .btn-cancel { background: #555; color: white; font-size: 0.78rem; padding: 8px 14px; }
+        .btn-reset  { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; z-index: 1000; font-size: 0.82rem; padding: 8px 14px; }
 
+        /* ── PICK MENU ── */
         #pick-menu {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #1a1a2e; border: 4px solid var(--gold); padding: 30px; border-radius: 20px;
-            z-index: 9999; min-width: 400px; max-width: 90vw; text-align: center;
-            box-shadow: 0 0 50px rgba(0,0,0,0.9);
+            background: #10102a; border: 3px solid var(--gold); padding: 24px; border-radius: 18px;
+            z-index: 9999; min-width: 360px; max-width: 92vw; text-align: center;
+            box-shadow: 0 0 40px rgba(0,0,0,0.9);
         }
         #pick-cards-grid {
-            display: flex; gap: 12px; justify-content: center; align-items: flex-end;
-            flex-wrap: wrap; margin-top: 20px; min-height: 150px;
+            display: flex; gap: 10px; justify-content: center; align-items: flex-end;
+            flex-wrap: wrap; margin-top: 16px; min-height: 130px;
         }
 
+        /* ── TARGET MENU ── */
         #target-menu {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #1a1a2e; border: 3px solid var(--gold); padding: 30px; border-radius: 20px;
-            z-index: 9999; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8); min-width: 300px;
+            background: #10102a; border: 2px solid var(--gold); padding: 24px; border-radius: 16px;
+            z-index: 9999; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.85); min-width: 260px;
         }
-        #timer-box { font-size: 1.4rem; color: var(--gold); font-weight: bold; min-height: 2rem; }
 
-        .reveal-row { display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; align-items: flex-start; padding: 10px; }
+        /* ── SKS RESULT TOAST ── */
+        #sks-toast {
+            display: none; position: fixed; top: 30%; left: 50%; transform: translateX(-50%);
+            background: rgba(10,8,30,0.95); border: 2px solid var(--gold);
+            padding: 16px 28px; border-radius: 14px; z-index: 9998;
+            font-size: 1.1rem; color: var(--gold); text-align: center;
+            box-shadow: 0 0 20px rgba(241,196,15,0.4);
+        }
+
+        #timer-box { font-size: 1.3rem; color: var(--gold); font-weight: bold; min-height: 1.8rem; }
+
+        .reveal-row { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; align-items: flex-start; padding: 8px; }
         .reveal-player { text-align: center; }
-        .reveal-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
-        .reveal-player h4 { margin: 0 0 6px; color: var(--gold); }
-        .reveal-power { font-size: 1.1rem; font-weight: bold; margin-top: 8px; }
+        .reveal-cards { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
+        .reveal-player h4 { margin: 0 0 5px; color: var(--gold); font-size: 0.9rem; }
+        .reveal-power { font-size: 1rem; font-weight: bold; margin-top: 6px; }
     </style>
 </head>
 <body>
 <div id="sidebar">
-    <h2>👥 GRACZE</h2>
+    <h2 style="margin:0 0 12px;font-size:1rem;">👥 GRACZE</h2>
     <div id="player-list"></div>
 </div>
 
 <div id="game-area">
     <button class="btn-reset" onclick="socket.emit('start-game')">NOWA GRA (RESET)</button>
-    <h1 style="margin: 0 0 4px;">⚔️ MACHNOWIAK 2.0</h1>
+    <h1 style="margin:0 0 2px;font-size:1.4rem;">⚔️ MACHNOWIAK 2.0</h1>
     <div id="timer-box"></div>
-    <h2 id="status" style="color:var(--gold); height: 30px; margin: 4px 0;"></h2>
+    <h2 id="status" style="color:var(--gold);height:28px;margin:2px 0;font-size:1rem;"></h2>
     <div id="stół"></div>
 
     <div id="bottom-panel">
+        <!-- SKS panel unoszący się nad ręką -->
         <div id="sks-panel">
             <h3>🔥 UŻYĆ SKS?</h3>
-            <div style="display:flex; gap:10px; justify-content:center;">
+            <div style="display:flex;gap:10px;justify-content:center;">
                 <button style="background:var(--gold);color:#222;" onclick="sendSks(true)">TAK</button>
-                <button style="background:#444; color:white;" onclick="sendSks(false)">NIE</button>
+                <button style="background:#555;color:white;" onclick="sendSks(false)">NIE</button>
             </div>
         </div>
 
@@ -152,63 +187,54 @@
                 <button id="cancel-btn" class="btn-cancel" onclick="cancelCombo()" style="display:none;">✕ ANULUJ</button>
             </div>
             <div id="combo-info"></div>
-            <h3 style="margin: 0 0 4px;">TWOJA RĘKA:</h3>
             <div id="reka"></div>
         </div>
     </div>
-
-    <div id="pick-menu">
-        <h3 id="pick-title" style="font-size: 1.4rem; color: var(--gold); margin-top: 0;"></h3>
-        <div id="pick-cards-grid"></div>
-    </div>
-
-    <div id="target-menu">
-        <h3 style="color: var(--gold); margin-top: 0;">🎯 Wybierz cel dla ósemki:</h3>
-        <div id="target-list" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;"></div>
-    </div>
 </div>
+
+<!-- Modale -->
+<div id="pick-menu">
+    <h3 id="pick-title" style="font-size:1.2rem;color:var(--gold);margin-top:0;"></h3>
+    <div id="pick-cards-grid"></div>
+</div>
+
+<div id="target-menu">
+    <h3 style="color:var(--gold);margin-top:0;">🎯 Wybierz cel dla ósemki:</h3>
+    <div id="target-list" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"></div>
+</div>
+
+<div id="sks-toast"></div>
 
 <script>
     const socket = io();
 
-    // ── STAN GLOBALNY ─────────────────────────────────────────────────────────
     let myNick = null;
     let myHand = [];
     let selectedCards = [];  // { value, suit, _idx }
     let isMyTurn = false;
 
-    // ── INICJALIZACJA ─────────────────────────────────────────────────────────
-    // JEDEN window.onload - wcześniej był zdefiniowany DWIE RAZY co powodowało
-    // że myNick nigdy nie był ustawiony i isMyTurn zawsze był false
+    // ── INIT ──────────────────────────────────────────────────────────────────
     window.onload = () => {
         myNick = prompt("Twój Nick:");
         if (myNick) socket.emit('join', myNick);
     };
 
-    // ── EVENTY OD SERWERA ─────────────────────────────────────────────────────
+    // ── EVENTY SERWERA ────────────────────────────────────────────────────────
 
-    // JEDEN handler update-player-list (wcześniej były DWIE rejestracje - druga nadpisywała pierwszą)
     socket.on('update-player-list', list => {
-        // Renderuj listę
         document.getElementById('player-list').innerHTML = list.map(p => `
             <div class="player-card ${p.isCurrent ? 'active' : ''}">
-                <strong>${p.name}</strong><br>Karty: ${p.count} ${p.sksUsed ? '🚫' : ''}
-            </div>
-        `).join('');
+                <strong>${p.name}</strong><br>🃏 ${p.count} ${p.sksUsed ? '🚫SKS' : ''}
+            </div>`).join('');
 
-        // Sprawdź czy to nasza tura
         if (myNick) {
             const me = list.find(p => p.name === myNick);
             const wasMyTurn = isMyTurn;
             isMyTurn = me ? me.isCurrent : false;
-            if (isMyTurn && !wasMyTurn) {
-                // Właśnie stała się nasza tura - odśwież rękę
-                renderHand();
-            }
+            if (isMyTurn && !wasMyTurn) renderHand();
         }
     });
 
-    // JEDEN handler update-status
     socket.on('update-status', msg => {
         document.getElementById('status').innerText = msg;
     });
@@ -219,9 +245,7 @@
         renderHand();
     });
 
-    socket.on('clear-table', () => {
-        document.getElementById('stół').innerHTML = '';
-    });
+    socket.on('clear-table', () => { document.getElementById('stół').innerHTML = ''; });
 
     socket.on('game-begun', () => {
         document.getElementById('start-btn').style.display = 'none';
@@ -233,9 +257,7 @@
     });
 
     socket.on('error-msg', msg => {
-        isMyTurn = false;
-        cancelCombo();
-        alert(msg);
+        isMyTurn = false; cancelCombo(); alert(msg);
     });
 
     socket.on('update-table-hidden', data => {
@@ -244,6 +266,9 @@
         data.forEach(p => {
             const stack = document.createElement('div');
             stack.className = 'card-stack';
+            // Wysokość stosu dynamiczna
+            const cardCount = p.cards ? p.cards.length : 1;
+            stack.style.height = (115 + Math.max(0, cardCount - 1) * 22) + 'px';
             stack.innerHTML = `<div class="stack-info">${p.playerName}</div>`;
             if (p.cards && p.cards.length > 0) {
                 p.cards.forEach(c => stack.appendChild(makeCard(c)));
@@ -258,14 +283,10 @@
 
     socket.on('reveal-blef-anim', data => {
         const stol = document.getElementById('stół');
-        stol.innerHTML = `<h2 style="color:var(--danger);position:absolute;top:10px;">🚨 ${data.player} MIAŁ:</h2>`;
+        stol.innerHTML = `<h2 style="color:var(--danger);position:absolute;top:8px;font-size:1rem;">🚨 ${data.player} MIAŁ:</h2>`;
         const wrap = document.createElement('div');
-        wrap.style.cssText = 'display:flex;gap:10px;align-items:center;margin-top:40px;';
-        data.cards.forEach(c => {
-            const el = makeCard(c);
-            el.classList.add('in-reveal');
-            wrap.appendChild(el);
-        });
+        wrap.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:36px;';
+        data.cards.forEach(c => { const el = makeCard(c); el.classList.add('in-reveal'); wrap.appendChild(el); });
         stol.appendChild(wrap);
     });
 
@@ -278,14 +299,10 @@
             const div = document.createElement('div');
             div.className = 'reveal-player';
             div.innerHTML = `<h4>${r.name}</h4>`;
-            const cardsRow = document.createElement('div');
-            cardsRow.className = 'reveal-cards';
-            r.cards.forEach(c => {
-                const el = makeCard(c);
-                el.classList.add('in-reveal');
-                cardsRow.appendChild(el);
-            });
-            div.appendChild(cardsRow);
+            const cr = document.createElement('div');
+            cr.className = 'reveal-cards';
+            r.cards.forEach(c => { const el = makeCard(c); el.classList.add('in-reveal'); cr.appendChild(el); });
+            div.appendChild(cr);
             const pwr = document.createElement('div');
             pwr.className = 'reveal-power';
             pwr.innerText = `${r.finalPower} pkt`;
@@ -301,16 +318,19 @@
         document.getElementById('sks-panel').style.display = 'block';
     });
 
+    socket.on('sks-result', data => {
+        showToast(data.msg, 2800);
+    });
+
     socket.on('show-pick-menu', data => {
         const menu = document.getElementById('pick-menu');
         const grid = document.getElementById('pick-cards-grid');
         document.getElementById('pick-title').innerText = data.title;
         grid.innerHTML = '';
         let picked = [];
-
         data.pool.forEach(k => {
             const el = makeCard(k);
-            el.classList.add('in-pick');  // position: relative, nie nakłada się
+            el.classList.add('in-pick');
             el.onclick = () => {
                 if (el.classList.contains('selected')) return;
                 el.classList.add('selected');
@@ -322,7 +342,6 @@
             };
             grid.appendChild(el);
         });
-
         menu.style.display = 'block';
     });
 
@@ -331,9 +350,7 @@
     });
 
     socket.on('reset-client-ui', () => {
-        myHand = [];
-        selectedCards = [];
-        isMyTurn = false;
+        myHand = []; selectedCards = []; isMyTurn = false;
         document.getElementById('reka').innerHTML = '';
         document.getElementById('stół').innerHTML = '';
         document.getElementById('status').innerText = '';
@@ -351,47 +368,47 @@
         const reka = document.getElementById('reka');
         reka.innerHTML = '';
 
+        // Zmniejsz karty jeśli jest ich dużo
+        reka.className = myHand.length > 9 ? 'many-cards' : '';
+
         myHand.forEach((k, i) => {
             const el = makeCard(k);
             el.classList.add('in-hand');
-
-            const isSel = selectedCards.some(s => s._idx === i);
-            if (isSel) el.classList.add('selected');
-
-            el.onclick = () => handleCardClick(k, i, el);
+            if (selectedCards.some(s => s._idx === i)) el.classList.add('selected');
+            el.onclick = () => handleCardClick(k, i);
             reka.appendChild(el);
         });
 
-        refreshActionButtons();
+        refreshButtons();
     }
 
-    function refreshActionButtons() {
-        const hasSelected = selectedCards.length > 0;
-        document.getElementById('play-btn').style.display = (hasSelected && isMyTurn) ? 'inline-block' : 'none';
-        document.getElementById('cancel-btn').style.display = hasSelected ? 'inline-block' : 'none';
+    function refreshButtons() {
+        const has = selectedCards.length > 0;
+        document.getElementById('play-btn').style.display   = (has && isMyTurn) ? 'inline-block' : 'none';
+        document.getElementById('cancel-btn').style.display = has ? 'inline-block' : 'none';
 
-        // Info pod ręką
         const info = document.getElementById('combo-info');
         if (!isMyTurn) { info.innerText = ''; return; }
-        if (selectedCards.length === 0) { info.innerText = '👆 Kliknij kartę aby ją wybrać'; return; }
+        if (!has) { info.innerText = '👆 Kliknij kartę aby ją wybrać'; return; }
 
         const hasJoker = selectedCards.some(s => s.value === 'Joker');
         const hasTwo   = selectedCards.some(s => s.value === '2');
         const hasEight = selectedCards.some(s => s.value === '8');
 
-        const names = selectedCards.map(c => c.value === 'Joker' ? '🃏' : `${c.value}${c.suit}`).join(' + ');
+        const names = selectedCards.map(c => c.value === 'Joker' ? '🃏Joker' : `${c.value}${c.suit}`).join(' + ');
         let hint = `Wybrano: ${names}`;
 
         if (hasJoker && selectedCards.length < 2) hint += ' — wybierz drugą kartę';
         else if (hasTwo && selectedCards.length < 2) hint += ' — wybierz kartę do podwojenia';
-        else if (hasEight) hint += ' — po zagraniu wybierzesz cel';
+        else if (hasEight && selectedCards.length < 2) hint += ' — możesz dodać kartę lub zagrać samą 8 | po zagraniu wybierzesz cel';
+        else if (hasEight) hint += ' — po zagraniu wybierzesz cel dla 8';
 
         info.innerText = hint;
     }
 
-    // ── LOGIKA WYBORU KART ────────────────────────────────────────────────────
+    // ── WYBÓR KART ────────────────────────────────────────────────────────────
 
-    function handleCardClick(card, idx, el) {
+    function handleCardClick(card, idx) {
         if (!isMyTurn) return;
 
         // Odznaczanie
@@ -402,7 +419,6 @@
             return;
         }
 
-        // Zasady dodawania do combo:
         const hasJoker  = selectedCards.some(s => s.value === 'Joker');
         const hasTwo    = selectedCards.some(s => s.value === '2');
         const hasEight  = selectedCards.some(s => s.value === '8');
@@ -411,24 +427,29 @@
         let canAdd = false;
 
         if (selectedCards.length === 0) {
-            // Pierwsza karta - zawsze można wybrać
             canAdd = true;
 
         } else if (hasJoker && selectedCards.length < 2) {
-            // Joker wybrany - dodaj dowolną drugą kartę
+            // Joker + dowolna druga karta
             canAdd = true;
 
         } else if (card.value === 'Joker' && selectedCards.length === 1 && !hasJoker) {
-            // Dodajesz Jokera jako drugą kartę do istniejącej
+            // Dodanie Jokera jako drugiej karty
             canAdd = true;
 
         } else if (hasTwo && selectedCards.length < 2 && card.value !== '2' && card.value !== 'Joker') {
-            // "2" wybrane - dodaj kartę bazową (nie kolejną 2, nie Jokera)
+            // 2 + karta bazowa (nie kolejna 2, nie Joker)
             canAdd = true;
 
+        } else if (hasEight && selectedCards.length < 2 && card.value !== '8' && card.value !== 'Joker') {
+            // 8 + dowolna jedna karta (nie kolejna 8, nie Joker)
+            // Karta dodana do 8 daje swoje punkty bazowe
+            canAdd = true;
+
+        } else if (hasNormal && selectedCards.length < 2 && card.value === '8') {
+            // Wybrano normalną kartę, dodajesz 8 jako drugą (8 odejmie punkty)
+            canAdd = true;
         }
-        // "8" gra się solo - cel wybierany przez menu, nie przez drugą kartę
-        // Normalna karta gra się solo
 
         if (canAdd) {
             selectedCards.push({ ...card, _idx: idx });
@@ -437,7 +458,7 @@
         renderHand();
     }
 
-    // ── ZAGRANIE COMBO ────────────────────────────────────────────────────────
+    // ── ZAGRANIE ──────────────────────────────────────────────────────────────
 
     function submitCombo() {
         if (!isMyTurn || selectedCards.length === 0) return;
@@ -446,18 +467,12 @@
         const hasTwo   = selectedCards.some(s => s.value === '2');
         const hasEight = selectedCards.some(s => s.value === '8');
 
-        if (hasJoker && selectedCards.length < 2) {
-            alert('Joker wymaga wybrania drugiej karty!'); return;
-        }
-        if (hasTwo && selectedCards.length < 2) {
-            alert('"2" wymaga wybrania karty bazowej!'); return;
-        }
+        if (hasJoker && selectedCards.length < 2) { alert('Joker wymaga wybrania drugiej karty!'); return; }
+        if (hasTwo   && selectedCards.length < 2) { alert('"2" wymaga wybrania karty bazowej!'); return; }
 
-        // Usuń pomocniczy _idx przed wysłaniem
         const cleanCards = selectedCards.map(({ _idx, ...card }) => card);
 
         if (hasEight) {
-            // Zbierz listę innych graczy z sidebara
             const targets = [];
             document.querySelectorAll('#player-list .player-card strong').forEach(el => {
                 if (el.innerText !== myNick) targets.push(el.innerText);
@@ -479,7 +494,7 @@
         renderHand();
     }
 
-    // ── MENU WYBORU CELU (ósemka) ─────────────────────────────────────────────
+    // ── MENU CELU ─────────────────────────────────────────────────────────────
 
     function openTargetMenu(targets, callback) {
         const menu = document.getElementById('target-menu');
@@ -487,9 +502,7 @@
         list.innerHTML = '';
         targets.forEach(t => {
             const b = document.createElement('button');
-            b.innerText = t;
-            b.className = 'btn-start';
-            b.style.margin = '5px';
+            b.innerText = t; b.className = 'btn-start'; b.style.margin = '4px';
             b.onclick = () => { menu.style.display = 'none'; callback(t); };
             list.appendChild(b);
         });
@@ -503,14 +516,23 @@
         document.getElementById('sks-panel').style.display = 'none';
     }
 
-    // ── TWORZENIE ELEMENTU KARTY ──────────────────────────────────────────────
+    // ── TOAST ─────────────────────────────────────────────────────────────────
+
+    function showToast(msg, duration) {
+        const t = document.getElementById('sks-toast');
+        t.innerText = msg;
+        t.style.display = 'block';
+        setTimeout(() => { t.style.display = 'none'; }, duration);
+    }
+
+    // ── TWORZENIE KARTY ───────────────────────────────────────────────────────
 
     function makeCard(k) {
         const div = document.createElement('div');
         const isRed = k.suit === '♥' || k.suit === '♦';
         div.className = `karta${isRed ? ' red' : ''}`;
         if (k.value === 'Joker') {
-            div.innerHTML = `<span class="val">🃏</span><span class="suit">Joker</span>`;
+            div.innerHTML = `<span class="val">🃏</span><span class="suit" style="top:22px;">Joker</span>`;
         } else {
             div.innerHTML = `<span class="val">${k.value}</span><span class="suit">${k.suit}</span><span class="val-br">${k.value}</span>`;
         }
