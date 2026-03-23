@@ -360,7 +360,8 @@
         } else if (hasTwo && hasEight && selectedCards.length < 3) {
             hint += ' — wybierz kartę bazową do combo 8+2'; complete = false;
         } else if (hasEight && selectedCards.length === 1) {
-            hint += ' — możesz dodać kartę lub zagrać samą 8';
+            hint += ' — musisz dodać kartę punktową (3–A)';
+            complete = false;
         } else if (hasEight) {
             hint += ' — po zagraniu wybierzesz cel';
         }
@@ -409,6 +410,7 @@
         }
 
         if (hasEight) {
+            if (cards.length === 1) return 'Ósemka wymaga dodatkowej karty punktowej (3–A).';
             if (cards.length > 2) return 'Z 8 można zagrać max 1 dodatkową kartę.';
             if (cards.length === 2) {
                 const other = cards.find(c => c.value !== '8');

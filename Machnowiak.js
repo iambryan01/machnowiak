@@ -32,7 +32,7 @@ function createDeck() {
     const suits  = ['♠','♣','♥','♦'];
     let deck = [];
     for (let s of suits) for (let v of values) deck.push({ value: v, suit: s });
-    deck.push({ value: 'Joker', suit: '🃏' }, { value: 'Joker', suit: '🃏' });
+    deck.push({ value: 'Joker', suit: '🃏' });
     return deck.sort(() => Math.random() - 0.5);
 }
 
@@ -81,6 +81,7 @@ function validateCombo(cards) {
     }
 
     if (hasEight) {
+        if (cards.length === 1) return 'Ósemka musi być zagrana z kartą punktową (3–A).';
         if (cards.length > 2) return 'Z ósemką można zagrać maksymalnie 1 dodatkową kartę.';
         if (cards.length === 2) {
             const other = cards.find(c => c.value !== '8');
@@ -185,6 +186,7 @@ io.on('connection', (socket) => {
         }
 
         p.currentCombo = [...cards];
+        p.originalComboCount = cards.length;
         p.target = target || null;
 
         const maxHandVal  = p.hand.length > 0 ? Math.max(...p.hand.map(c => cardValues[c.value] || 0)) : 0;
@@ -368,6 +370,20 @@ io.on('connection', (socket) => {
         }
     });
 
+    function showSksToEligible() {
+        sksResponses = 0;
+        let anyEligible = false;
+        players.forEach(p => {
+            if (!p.sksUsed) {
+                io.to(p.id).emit('show-sks-modal');
+                anyEligible = true;
+            } else {
+                sksResponses++;
+            }
+        });
+        if (!anyEligible || sksResponses >= players.length) checkAllSks();
+    }
+
     function refreshTableFor(changedPIdx) {
         players.forEach(pl => {
             const plIdx = players.indexOf(pl);
@@ -385,7 +401,7 @@ io.on('connection', (socket) => {
         if (sksResponses >= players.length) {
             sksResponses = 0;
             recalcAndShowTable();
-            startRoundCountdown();
+            setTimeout(() => resolveRound(), 3000);
         }
     }
 
@@ -416,29 +432,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ── ODLICZANIE ────────────────────────────────────────────────────────────
-
-    function startRoundCountdown() {
-        let timeLeft = 15;
-        if (roundTimer) { clearInterval(roundTimer); roundTimer = null; }
-        io.emit('update-timer', timeLeft);
-        roundTimer = setInterval(() => {
-            timeLeft--;
-            io.emit('update-timer', timeLeft);
-            if (timeLeft <= 0) {
-                clearInterval(roundTimer);
-                roundTimer = null;
-                cleanTable();
-            }
-        }, 1000);
-    }
-
     function finishTurn(p) {
         p.hasPlayed = true;
         p.waitingForTarget = false;
         tableCards.push({
             playerIdx: players.indexOf(p), playerName: p.name,
-            cards: [...p.currentCombo], target: p.target, sksEights: []
+            cards: [...p.currentCombo], target: p.target, sksEights: [],
+            originalCount: p.originalComboCount || p.currentCombo.length
         });
 
         currentPlayerIdx = (currentPlayerIdx + 1) % players.length;
@@ -455,8 +455,8 @@ io.on('connection', (socket) => {
 
         if (tableCards.length === players.length) {
             canCheckBlef = false;
-            io.emit('update-status', '🔍 Wszyscy zagrali! Rozstrzyganie...');
-            setTimeout(() => resolveRound(), 1500);
+            io.emit('update-status', '🔍 Wszyscy zagrali! SKS...');
+            setTimeout(() => showSksToEligible(), 1500);
         } else {
             io.emit('update-status', `Tura: ${players[currentPlayerIdx].name}`);
         }
@@ -466,17 +466,26 @@ io.on('connection', (socket) => {
 
     // ── PUNKTY ────────────────────────────────────────────────────────────────
 
-    function calculatePower(cards) {
-        const base = cards.filter(c => c.value !== '8' && c.value !== '2' && c.value !== 'Joker');
-        let pwr = base.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
-        if (cards.some(c => c.value === '2')) pwr *= 2;
+    function calculatePower(cards, originalCount) {
+        const oc = (originalCount !== undefined) ? originalCount : cards.length;
+        const origCards = cards.slice(0, oc);
+        const extraCards = cards.slice(oc);
+
+        const origBase = origCards.filter(c => !['8','2','Joker'].includes(c.value));
+        let pwr = origBase.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
+        if (origCards.some(c => c.value === '2')) pwr *= 2;
+
+        // Karty dobrane w bule/SKS NIE podwajają się
+        const extraBase = extraCards.filter(c => !['8','2','Joker'].includes(c.value));
+        pwr += extraBase.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
+
         return pwr;
     }
 
     function calcResults() {
         let res = tableCards.map(m => ({
             playerIdx: m.playerIdx, playerName: m.playerName,
-            power: calculatePower(m.cards), m: m
+            power: calculatePower(m.cards, m.originalCount), m: m
         }));
         tableCards.forEach(move => {
             move.cards.forEach((card, cardIdx) => {
@@ -549,17 +558,13 @@ io.on('connection', (socket) => {
             }
 
             broadcastDebug();
-            setTimeout(() => io.emit('show-sks-modal'), 2000);
+            setTimeout(() => startNextRound(), 2000);
         }
     }
 
-    function cleanTable() {
-        if (players.length === 0) { tableCards = []; gameStarted = false; return; }
-        const allOnTable = tableCards.flatMap(m => m.cards);
-        gameDeck.push(...allOnTable.filter(c => c.value !== 'Joker'));
-        tableCards = [];
+    function startNextRound() {
+        if (players.length === 0) return;
         currentPlayerIdx = 0;
-        players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
         io.emit('clear-table');
         io.emit('update-status', `NOWA RUNDA - Zaczyna: ${players[currentPlayerIdx].name}`);
         updatePlayerList();
