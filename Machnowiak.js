@@ -164,7 +164,6 @@ io.on('connection', (socket) => {
         }, 3000);
     });
 
-    // --- POPRAWIONY SKS ---
     socket.on('sks-decision', (decision) => {
         const pIdx = players.findIndex(p => p.id === socket.id);
         const p = players[pIdx];
@@ -172,28 +171,31 @@ io.on('connection', (socket) => {
         if (decision && !p.sksUsed) {
             p.sksUsed = true;
             const sksCard = gameDeck.shift();
-            const tableMove = tableCards.find(m => m.playerIdx === pIdx);
+            // Szukamy ruchu gracza na stole
+            let tableMove = tableCards.find(m => m.playerIdx === pIdx);
             
             if (sksCard.value === 'Joker') {
                 p.hand.push(sksCard);
                 io.to(p.id).emit('init-hand', p.hand);
-                io.emit('update-status', `${p.name} wylosował Jokera z SKS!`);
+                io.emit('update-status', `${p.name} wylosował Jokera z SKS do ręki!`);
                 advanceSks();
-            } else if (tableMove) {
-                tableMove.cards.push(sksCard);
+            } else {
+                // Dokładamy kartę na stos (do tableMove lub currentCombo jeśli jeszcze nie wysłano)
+                if (tableMove) {
+                    tableMove.cards.push(sksCard);
+                } else {
+                    p.currentCombo.push(sksCard);
+                }
+
                 if (sksCard.value === '8') {
-                    // Tutaj rozróżniamy kolor ósemki
-                    const penalty = (sksCard.suit === '♥' || sksCard.suit === '♦') ? 8 : 4;
                     io.to(p.id).emit('show-target-menu', players.filter(pl => pl.id !== p.id).map(pl => pl.name));
                 } else {
+                    io.emit('update-status', `${p.name} dołożył kartę z SKS na stół.`);
                     advanceSks();
                 }
-            } else {
-                advanceSks();
             }
         } else {
-            sksResponses++;
-            checkAllSks();
+            advanceSks();
         }
     });
 
@@ -211,11 +213,10 @@ io.on('connection', (socket) => {
 
     socket.on('target-selected', (t) => {
         const p = players.find(pl => pl.id === socket.id);
-        p.target = t;
         const pIdx = players.indexOf(p);
-        const move = tableCards.find(m => m.playerIdx === pIdx);
+        p.target = t;
         
-        // Aktualizacja celu w ruchu na stole
+        let move = tableCards.find(m => m.playerIdx === pIdx);
         if(move) move.target = t;
 
         if (!p.hasPlayed) {
@@ -262,95 +263,72 @@ io.on('connection', (socket) => {
         updatePlayerList();
     }
 
-    function calculatePower(cards, isBula) {
+    function calculatePower(cards) {
         if (!cards || cards.length === 0) return 0;
-        
-        // Zgodnie z zasadą "stos" - bierzemy pierwszą kartę
-        let firstCard = cards[0];
-        let pwr = cardValues[firstCard.value] || 0;
-
-        // Jeśli jest SKS (druga karta)
+        let pwr = cardValues[cards[0].value] || 0;
         if (cards.length > 1) {
             let nextCard = cards[1];
-            if (nextCard.value === '2') {
-                pwr *= 2;
-            } else if (nextCard.value === '8' || nextCard.value === 'Joker') {
-                pwr = 0;
-            } else {
-                pwr = cardValues[nextCard.value] || 0;
-            }
+            if (nextCard.value === '2') pwr *= 2;
+            else if (nextCard.value === '8' || nextCard.value === 'Joker') pwr = 0;
+            else pwr = cardValues[nextCard.value] || 0;
         }
         return pwr;
     }
 
-    function resolveRound(isSks, sksUser) {
+    function resolveRound(isSks) {
         let res = tableCards.map(m => ({ 
-            playerIdx: m.playerIdx, playerName: m.playerName, power: calculatePower(m.cards, wasBulaInRound), m: m 
+            playerIdx: m.playerIdx, playerName: m.playerName, power: calculatePower(m.cards), m: m 
         }));
 
-        // Nakładanie kar z ósemek (poza Bułą)
         tableCards.forEach(move => {
             move.cards.forEach(card => {
                 if (card.value === '8' && move.target) {
-                    const penalty = (card.suit === '♥' || card.suit === '♦') ? 8 : 4;
+                    const p = (card.suit === '♥' || card.suit === '♦') ? 8 : 4;
                     const t = res.find(r => r.playerName === move.target);
-                    if (t) t.power -= penalty;
+                    if (t) t.power -= p;
                 }
             });
         });
 
         io.emit('reveal-detailed', res.map(r => ({ name: r.playerName, cards: r.m.cards, finalPower: r.power })));
 
-        let maxP = Math.max(...res.map(r => r.power));
         let minP = Math.min(...res.map(r => r.power));
+        let maxP = Math.max(...res.map(r => r.power));
         let top = res.filter(r => r.power === maxP);
         let loser = res.find(r => r.power === minP);
 
         if (top.length > 1) {
             wasBulaInRound = true;
-            const names = top.map(t => t.playerName).join(" i ");
-            io.emit('update-status', `⚔️ BUŁA między: ${names}! Dogrywka...`);
-            
+            io.emit('update-status', `⚔️ BUŁA! Dogrywka...`);
             top.forEach(t => {
                 let ex = gameDeck.splice(0, 2);
                 ex.forEach(c => {
-                    if (c.value === 'Joker') {
-                        players[t.playerIdx].hand.push(c);
-                        io.to(players[t.playerIdx].id).emit('init-hand', players[t.playerIdx].hand);
-                    } else { t.m.cards.push(c); }
+                    if (c.value === 'Joker') players[t.playerIdx].hand.push(c);
+                    else t.m.cards.push(c);
                 });
             });
             setTimeout(() => resolveRound(false), 3000);
-        } else if (!isSks) {
+        } else {
             const all = tableCards.flatMap(m => m.cards);
             const valid = all.filter(c => c.value !== 'Joker');
-            
             if (wasBulaInRound) {
                 players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
-                gameDeck.push(...valid);
-                io.emit('update-status', `💀 Po dogrywce przegrywa ${loser.playerName} (${loser.power} pkt) i bierze 4 karne!`);
+                io.emit('update-status', `💀 ${loser.playerName} bierze 4 karne po Buło!`);
             } else {
                 players[loser.playerIdx].hand.push(...valid);
-                io.emit('update-status', `🃏 Rundę przegrywa ${loser.playerName} (${loser.power} pkt) i zbiera karty!`);
+                io.emit('update-status', `🃏 ${loser.playerName} przegrywa i zbiera karty!`);
             }
-            
             wasBulaInRound = false; 
-            setTimeout(() => {
-                io.emit('show-sks-modal'); 
-            }, 2000);
+            setTimeout(() => io.emit('show-sks-modal'), 2000);
         }
     }
 
     function cleanTable() {
-        const allOnTable = tableCards.flatMap(m => m.cards);
-        const toReturn = allOnTable.filter(c => c.value !== 'Joker');
-        gameDeck.push(...toReturn); 
-        
+        gameDeck.push(...tableCards.flatMap(m => m.cards).filter(c => c.value !== 'Joker'));
         tableCards = [];
         currentPlayerIdx = 0;
         players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.sksUsed = false; });
         io.emit('clear-table');
-        io.emit('update-status', `NOWA RUNDA - Zaczyna: ${players[currentPlayerIdx].name}`);
         updatePlayerList();
         players.forEach(p => io.to(p.id).emit('init-hand', p.hand));
     }
