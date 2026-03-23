@@ -155,7 +155,7 @@ io.on('connection', (socket) => {
             const allOnTable = tableCards.flatMap(m => m.cards);
             gameDeck.push(...allOnTable.filter(c => c.value !== 'Joker'));
             tableCards = [];
-            players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; });
+            players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.sksUsed = false; });
             currentPlayerIdx = winnerIdx;
             io.emit('clear-table');
             io.emit('update-status', `ZACZYNA: ${players[currentPlayerIdx].name}`);
@@ -163,6 +163,7 @@ io.on('connection', (socket) => {
         }, 3000);
     });
 
+    // --- POPRAWIONY SYSTEM SKS ---
     socket.on('sks-decision', (decision) => {
         const pIdx = players.findIndex(p => p.id === socket.id);
         const p = players[pIdx];
@@ -175,20 +176,27 @@ io.on('connection', (socket) => {
             if (sksCard.value === 'Joker') {
                 p.hand.push(sksCard);
                 io.to(p.id).emit('init-hand', p.hand);
-                io.emit('update-status', `${p.name} wylosował Jokera z SKS!`);
+                io.emit('update-status', `${p.name} wylosował Jokera z SKS do ręki!`);
                 advanceSks();
             } else {
-                if (tableMove) tableMove.cards.push(sksCard);
-                else p.currentCombo.push(sksCard);
+                // Dorzucamy kartę do stosu na stole
+                if (tableMove) {
+                    tableMove.cards.push(sksCard);
+                } else {
+                    // Fail-safe: jeśli z jakiegoś powodu nie ma ruchu na stole, tworzymy go
+                    tableCards.push({ playerIdx: pIdx, playerName: p.name, cards: [sksCard], target: null });
+                }
 
                 if (sksCard.value === '8') {
+                    io.emit('update-status', `${p.name} trafił Ósemkę z SKS! Wybiera cel...`);
                     io.to(p.id).emit('show-target-menu', players.filter(pl => pl.id !== p.id).map(pl => pl.name));
                 } else {
-                    io.emit('update-status', `${p.name} dołożył kartę z SKS.`);
+                    io.emit('update-status', `${p.name} dołożył ${sksCard.value}${sksCard.suit} z SKS.`);
                     advanceSks();
                 }
             }
         } else {
+            p.sksUsed = true; // Zaznaczamy jako użyte nawet przy "NIE", żeby przycisk zniknął
             advanceSks();
         }
     });
@@ -201,6 +209,8 @@ io.on('connection', (socket) => {
     function checkAllSks() {
         if (sksResponses >= players.length) {
             sksResponses = 0;
+            // Resetujemy sksUsed dla wszystkich przed kolejną rundą (zapewnia, że SKS pojawi się znów)
+            players.forEach(p => p.sksUsed = false);
             startRoundCountdown();
         }
     }
@@ -212,8 +222,12 @@ io.on('connection', (socket) => {
         let move = tableCards.find(m => m.playerIdx === pIdx);
         if(move) move.target = t;
 
-        if (!p.hasPlayed) finishTurn(p);
-        else advanceSks();
+        if (!p.hasPlayed) {
+            finishTurn(p);
+        } else {
+            // To był wybór celu po SKS
+            advanceSks();
+        }
     });
 
     function startRoundCountdown() {
@@ -252,7 +266,6 @@ io.on('connection', (socket) => {
         updatePlayerList();
     }
 
-    // --- NOWA LOGIKA SUMOWANIA ---
     function calculatePower(cards) {
         if (!cards || cards.length === 0) return 0;
         let sum = 0;
@@ -267,12 +280,10 @@ io.on('connection', (socket) => {
     }
 
     function resolveRound(isSks) {
-        // 1. Sumujemy wszystkie karty każdego gracza
         let res = tableCards.map(m => ({ 
             playerIdx: m.playerIdx, playerName: m.playerName, power: calculatePower(m.cards), m: m 
         }));
 
-        // 2. Odejmujemy punkty za ósemki od całości wyniku celu
         tableCards.forEach(move => {
             move.cards.forEach(card => {
                 if (card.value === '8' && move.target) {
@@ -322,7 +333,12 @@ io.on('connection', (socket) => {
         gameDeck.push(...tableCards.flatMap(m => m.cards).filter(c => c.value !== 'Joker'));
         tableCards = [];
         currentPlayerIdx = 0;
-        players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.sksUsed = false; });
+        players.forEach(p => { 
+            p.hasPlayed = false; 
+            p.currentCombo = []; 
+            p.target = null; 
+            p.sksUsed = false; // Resetowanie SKS na początku nowej rundy
+        });
         io.emit('clear-table');
         updatePlayerList();
         players.forEach(p => io.to(p.id).emit('init-hand', p.hand));
