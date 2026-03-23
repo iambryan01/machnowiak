@@ -65,7 +65,7 @@
         .karta.zakryta { background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%); color: transparent; border: 1px solid rgba(255,255,255,0.3); }
 
         #bottom-panel { display: flex; align-items: flex-end; gap: 16px; width: 95%; padding: 8px 0; margin-top: auto; position: relative; flex-shrink: 0; }
-        #sks-panel { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: rgba(10,8,30,0.96); border: 2px solid var(--gold); padding: 14px 24px; border-radius: 14px; text-align: center; white-space: nowrap; z-index: 100; display: none; }
+        #sks-panel { position: fixed; bottom: 220px; left: calc(100px + 50vw); transform: translateX(-50%); background: rgba(10,8,30,0.96); border: 2px solid var(--gold); padding: 14px 24px; border-radius: 14px; text-align: center; white-space: nowrap; z-index: 100; display: none; }
         #sks-panel h3 { margin: 0 0 10px; font-size: 1rem; }
 
         #reka-container { flex-grow: 1; text-align: center; position: relative; }
@@ -88,9 +88,9 @@
         .btn-draw   { background: #8e44ad; color: white; font-size: 0.82rem; padding: 8px 14px; }
         .btn-reset  { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; z-index: 1000; font-size: 0.82rem; padding: 8px 14px; }
 
-        #pick-menu { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #10102a; border: 3px solid var(--gold); padding: 24px; border-radius: 18px; z-index: 9999; min-width: 360px; max-width: 92vw; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.9); }
+        #pick-menu { display: none; position: fixed; top: 50%; left: calc(100px + 50vw); transform: translate(-50%, -50%); background: #10102a; border: 3px solid var(--gold); padding: 24px; border-radius: 18px; z-index: 9999; min-width: 360px; max-width: calc(100vw - 220px); text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.9); }
         #pick-cards-grid { display: flex; gap: 10px; justify-content: center; align-items: flex-end; flex-wrap: wrap; margin-top: 16px; min-height: 130px; }
-        #target-menu { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #10102a; border: 2px solid var(--gold); padding: 24px; border-radius: 16px; z-index: 9999; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.85); min-width: 260px; }
+        #target-menu { display: none; position: fixed; top: 50%; left: calc(100px + 50vw); transform: translate(-50%, -50%); background: #10102a; border: 2px solid var(--gold); padding: 24px; border-radius: 16px; z-index: 9999; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.85); min-width: 260px; }
 
         /* ── EKRAN WYGRANEJ ── */
         #win-screen {
@@ -124,7 +124,7 @@
 </div>
 
 <div id="game-area">
-    <button class="btn-reset" onclick="socket.emit('start-game')">NOWA GRA (RESET)</button>
+    <button id="reset-btn" class="btn-reset" onclick="socket.emit('start-game')" style="display:none;">NOWA GRA (RESET)</button>
     <h1 style="margin:0 0 2px;font-size:1.4rem;">⚔️ MACHNOWIAK 2.0</h1>
     <div id="timer-box"></div>
     <h2 id="status" style="color:var(--gold);height:28px;margin:2px 0;font-size:1rem;"></h2>
@@ -165,7 +165,8 @@
 <div id="win-screen">
     <h1 id="win-title">🏆 WYGRANA!</h1>
     <h2 id="win-name"></h2>
-    <button onclick="startNewGame()">NOWA GRA</button>
+    <button id="win-btn" onclick="startNewGame()" style="display:none;">NOWA GRA</button>
+    <p id="win-wait" style="display:none; color:rgba(255,255,255,0.5); font-size:0.95rem; margin:0;">Czekaj na hosta...</p>
 </div>
 
 <button id="debug-toggle" onclick="toggleDebug()">DBG</button>
@@ -179,6 +180,7 @@
     let myHand = [];
     let selectedCards = [];
     let isMyTurn = false;
+    let amIHost = false;
     let hasDrawnThisTurn = false;
     let debugVisible = false;
 
@@ -193,6 +195,7 @@
     }
 
     function startNewGame() {
+        if (!amIHost) return;
         document.getElementById('win-screen').classList.remove('visible');
         socket.emit('start-game');
     }
@@ -219,6 +222,8 @@
             title.className = 'lose';
             document.getElementById('win-name').innerText = `Wygrał(a): ${winnerName}`;
         }
+        document.getElementById('win-btn').style.display  = amIHost ? 'inline-block' : 'none';
+        document.getElementById('win-wait').style.display = amIHost ? 'none' : 'block';
         document.getElementById('win-screen').classList.add('visible');
     });
 
@@ -234,6 +239,8 @@
             const me = list.find(p => p.name === myNick);
             const wasMyTurn = isMyTurn;
             isMyTurn = me ? me.isCurrent : false;
+            amIHost = me ? me.isHost : false;
+            document.getElementById('reset-btn').style.display = amIHost ? 'block' : 'none';
             if (isMyTurn && !wasMyTurn) { hasDrawnThisTurn = false; renderHand(); }
         }
     });
@@ -277,6 +284,8 @@
     });
 
     socket.on('reveal-detailed', results => {
+        isMyTurn = false;
+        cancelCombo();
         const stol = document.getElementById('stół');
         stol.innerHTML = '';
         const row = document.createElement('div'); row.className = 'reveal-row';
@@ -325,6 +334,7 @@
         document.getElementById('play-btn').style.display = 'none';
         document.getElementById('cancel-btn').style.display = 'none';
         document.getElementById('draw-btn').style.display = 'none';
+        document.getElementById('reset-btn').style.display = amIHost ? 'block' : 'none';
         document.getElementById('combo-info').innerText = '';
         document.getElementById('win-screen').classList.remove('visible');
     });

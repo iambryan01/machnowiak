@@ -14,6 +14,7 @@ const cardValues = {
 let gameDeck = [];
 let players = [];
 let gameStarted = false;
+let gameResolving = false;
 let tableCards = [];
 let lastPlayerIdx = -1;
 let currentPlayerIdx = 0;
@@ -133,6 +134,7 @@ io.on('connection', (socket) => {
 
     socket.on('new-game-request', () => {
         gameStarted = false;
+        gameResolving = false;
         tableCards = [];
         sksResponses = 0;
         wasBulaInRound = false;
@@ -147,6 +149,7 @@ io.on('connection', (socket) => {
     function resetGame() {
         if (players.length === 0) return;
         gameStarted = true;
+        gameResolving = false;
         gameDeck = createDeck();
         tableCards = [];
         lastPlayerIdx = -1;
@@ -177,7 +180,7 @@ io.on('connection', (socket) => {
 
         dbg(`PLAY-COMBO od ${p.name}: ${cards.map(c=>c.value+c.suit).join('+')}, target:${target}, cur:${currentPlayerIdx}, pIdx:${pIdx}`);
 
-        if (!gameStarted || p.hasPlayed || pIdx !== currentPlayerIdx) {
+        if (!gameStarted || gameResolving || p.hasPlayed || pIdx !== currentPlayerIdx) {
             socket.emit('error-msg', `To nie Twoja tura! (current: ${players[currentPlayerIdx]?.name})`); return;
         }
 
@@ -346,16 +349,22 @@ io.on('connection', (socket) => {
     socket.on('draw-card', () => {
         const pIdx = players.findIndex(pl => pl.id === socket.id);
         const p = players[pIdx];
-        if (!p || !gameStarted || p.hasPlayed || pIdx !== currentPlayerIdx) return;
+        if (!p || !gameStarted || gameResolving || p.hasPlayed || pIdx !== currentPlayerIdx) return;
         replenish(1);
         const card = gameDeck.shift();
         if (card) {
             p.hand.push(card);
             io.to(p.id).emit('init-hand', p.hand);
-            io.emit('update-status', `${p.name} dobrał kartę. Tura: ${p.name}`);
-            updatePlayerList();
-            broadcastDebug();
         }
+        // Dobierz = pominiecie tury (puste combo, moc = 0)
+        p.currentCombo = [];
+        p.originalComboCount = 0;
+        p.target = null;
+        lastMoveWasBlef = false;
+        lastPlayerIdx = pIdx;
+        canCheckBlef = false;
+        io.emit('update-status', `${p.name} dobrał kartę i pomija turę.`);
+        finishTurn(p);
     });
 
     // ── SKS ───────────────────────────────────────────────────────────────────
@@ -482,6 +491,7 @@ io.on('connection', (socket) => {
 
         if (tableCards.length === players.length) {
             canCheckBlef = false;
+            gameResolving = true;
             io.emit('update-status', '🔍 Wszyscy zagrali! Odkrywanie kart...');
             recalcAndShowTable();
             setTimeout(() => {
@@ -596,6 +606,7 @@ io.on('connection', (socket) => {
 
     function startNextRound() {
         if (players.length === 0) return;
+        gameResolving = false;
         currentPlayerIdx = 0;
         io.emit('clear-table');
         io.emit('update-status', `NOWA RUNDA - Zaczyna: ${players[currentPlayerIdx].name}`);
@@ -607,7 +618,7 @@ io.on('connection', (socket) => {
     function updatePlayerList() {
         io.emit('update-player-list', players.map((p, idx) => ({
             name: p.name, count: p.hand.length, isCurrent: idx === currentPlayerIdx,
-            sksUsed: p.sksUsed, waitingForTarget: p.waitingForTarget
+            sksUsed: p.sksUsed, waitingForTarget: p.waitingForTarget, isHost: idx === 0
         })));
     }
 
