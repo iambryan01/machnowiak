@@ -36,11 +36,11 @@
         .karta.red { color: var(--danger); }
         .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border: 1px solid white; }
 
-        .karta:nth-child(2) { top: 45px; } 
-        .karta:nth-child(3) { top: 90px; } 
-        .karta:nth-child(4) { top: 135px; } 
-        .karta:nth-child(5) { top: 180px; }
-        .karta:nth-child(n+6) { top: 225px; }
+        /* Kaskadowe układanie kart na stole */
+        .card-stack .karta:nth-child(2) { top: 30px; } 
+        .card-stack .karta:nth-child(3) { top: 60px; } 
+        .card-stack .karta:nth-child(4) { top: 90px; } 
+        .card-stack .karta:nth-child(5) { top: 120px; }
 
         #bottom-panel { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; width: 90%; padding: 10px; margin-top: auto; position: relative; }
         #sks-panel { display: none; background: rgba(0,0,0,0.7); border: 3px solid var(--gold); padding: 20px; border-radius: 15px; text-align: center; width: 200px; }
@@ -78,7 +78,7 @@
     </div>
 
     <div id="game-area">
-        <button class="btn-reset" onclick="socket.emit('new-game-request')">NOWA GRA (RESET)</button>
+        <button class="btn-reset" onclick="socket.emit('start-game')">NOWA GRA (RESET)</button>
         <h1>⚔️ MACHNOWIAK 2.0</h1>
         <div id="timer-box"></div>
         <h2 id="status" style="color:var(--gold); height: 30px;"></h2>
@@ -117,7 +117,6 @@
     <script>
         const socket = io();
         let mySksUsedLocally = false;
-        let selectedCards = []; // Przechowuje wybrane karty funkcyjne lokalnie
 
         window.onload = () => {
             const nick = prompt("Twój Nick:");
@@ -132,6 +131,7 @@
             `).join('');
         });
 
+        // POPRAWIONA AKTUALIZACJA STOŁU - Widzisz własne rzucone karty
         socket.on('update-table-hidden', data => {
             const stol = document.getElementById('stół');
             stol.innerHTML = '';
@@ -139,25 +139,16 @@
                 const stack = document.createElement('div');
                 stack.className = 'card-stack';
                 stack.innerHTML = `<div class="stack-info">${p.playerName}</div>`;
-                if (p.cards === null || p.cards.length === 0) {
+                
+                // Jeśli p.cards istnieje (serwer wysłał je tylko do Ciebie), pokazujemy je
+                if (p.cards && p.cards.length > 0) {
+                    p.cards.forEach(c => stack.appendChild(createCardElement(c)));
+                } else {
+                    // Jeśli p.cards jest null, to znaczy że to karty innego gracza - pokazujemy zakrytą
                     const rev = document.createElement('div');
                     rev.className = 'karta zakryta';
                     stack.appendChild(rev);
-                } else {
-                    p.cards.forEach(c => stack.appendChild(createCardElement(c)));
                 }
-                stol.appendChild(stack);
-            });
-        });
-
-        socket.on('reveal-detailed', data => {
-            const stol = document.getElementById('stół');
-            stol.innerHTML = '';
-            data.forEach(p => {
-                const stack = document.createElement('div');
-                stack.className = 'card-stack';
-                stack.innerHTML = `<div class="stack-info">${p.name}<br>${p.finalPower} pkt</div>`;
-                p.cards.forEach(c => stack.appendChild(createCardElement(c)));
                 stol.appendChild(stack);
             });
         });
@@ -170,19 +161,16 @@
             return div;
         }
 
+        // POPRAWIONA RĘKA - Podświetlanie tylko dla 2, 8 i Jokera
         socket.on('init-hand', hand => {
             const reka = document.getElementById('reka');
             reka.innerHTML = '';
-            // Resetujemy wybór przy każdym odświeżeniu ręki z serwera, 
-            // chyba że serwer potwierdził nam "combo" - wtedy serwer i tak zabrał te karty z hand.
             hand.forEach(k => {
                 const div = createCardElement(k);
                 div.onclick = () => {
-                    // Logika wysuwania:
-                    if (div.classList.contains('selected')) {
-                        div.classList.remove('selected');
-                    } else {
-                        div.classList.add('selected');
+                    // Wizualne podświetlenie tylko dla kart funkcyjnych
+                    if (['2', '8', 'Joker'].includes(k.value)) {
+                        div.classList.toggle('selected');
                     }
                     socket.emit('play-card', k);
                 };
@@ -190,18 +178,8 @@
             });
         });
 
-        socket.on('show-sks-modal', () => {
-            if (!mySksUsedLocally) document.getElementById('sks-panel').style.display = 'block';
-            else socket.emit('sks-decision', false);
-        });
-
-        function sendSks(v) {
-            if(v) mySksUsedLocally = true;
-            socket.emit('sks-decision', v);
-            document.getElementById('sks-panel').style.display = 'none';
-        }
-
         socket.on('update-status', msg => document.getElementById('status').innerText = msg);
+        
         socket.on('clear-table', () => {
             document.getElementById('stół').innerHTML = '';
         });
@@ -215,7 +193,7 @@
             data.pool.forEach(k => {
                 const d = createCardElement(k);
                 d.onclick = () => {
-                    if (d.classList.contains('selected')) return; // Zapobiega podwójnemu kliknięciu
+                    if (d.classList.contains('selected')) return;
                     d.classList.add('selected');
                     selectedPick.push(k);
                     if(selectedPick.length === data.count) {
@@ -239,11 +217,24 @@
             });
         });
 
-        socket.on('reset-client-ui', () => {
-            location.reload(); // Najbezpieczniejsza metoda na pełny reset stanu
+        socket.on('game-begun', () => {
+            document.getElementById('start-btn').style.display = 'none';
         });
 
-        socket.on('game-begun', () => document.getElementById('start-btn').style.display = 'none');
+        socket.on('update-timer', time => {
+            document.getElementById('timer-box').innerText = time > 0 ? `CZAS: ${time}s` : "";
+        });
+
+        // Animacja odkrycia kart przy blefie
+        socket.on('reveal-blef-anim', data => {
+            const stol = document.getElementById('stół');
+            stol.innerHTML = `<h2 style="color:var(--danger); position:absolute; top:10px;">${data.player} MIAŁ:</h2>`;
+            const wrap = document.createElement('div');
+            wrap.style.display = 'flex'; wrap.style.gap = '10px';
+            data.cards.forEach(c => wrap.appendChild(createCardElement(c)));
+            stol.appendChild(wrap);
+        });
+
     </script>
 </body>
 </html>
