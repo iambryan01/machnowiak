@@ -24,11 +24,8 @@ let roundTimer = null;
 let wasBulaInRound = false;
 let pendingBlefPickup = null;
 
-// ── DEBUG ─────────────────────────────────────────────────────────────────────
 const DEBUG = true;
-function dbg(...args) {
-    if (DEBUG) console.log('[DBG]', ...args);
-}
+function dbg(...args) { if (DEBUG) console.log('[DBG]', ...args); }
 
 function createDeck() {
     const values = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
@@ -44,58 +41,69 @@ function replenish(needed) {
 }
 
 // ── WALIDACJA COMBO ───────────────────────────────────────────────────────────
-// Zwraca null jeśli ok, string z błędem jeśli niedozwolone.
+// Zasady:
+//   Joker  = Joker + dokładnie 2 karty (przynajmniej 1 punktowa)
+//   "2"    = "2" + dokładnie 1 karta punktowa (opcjonalnie + "8") — max 2 karty łącznie
+//            LUB "8" + "2" + karta punktowa — max 3 karty
+//   "8"    = "8" solo LUB "8" + 1 karta punktowa — max 2 karty
+//   normalna = solo
 function validateCombo(cards) {
     if (cards.length === 0) return 'Puste combo.';
 
-    const hasJoker  = cards.some(c => c.value === 'Joker');
-    const hasTwo    = cards.some(c => c.value === '2');
-    const hasEight  = cards.some(c => c.value === '8');
+    const hasJoker   = cards.some(c => c.value === 'Joker');
+    const hasTwo     = cards.some(c => c.value === '2');
+    const hasEight   = cards.some(c => c.value === '8');
     const jokerCount = cards.filter(c => c.value === 'Joker').length;
 
-    // Niedozwolone: 2 Jokery razem
     if (jokerCount > 1) return 'Nie można zagrać dwóch Jokerów naraz.';
 
-    // Niedozwolone: Joker + karta zerowa (2 lub 8) bez karty bazowej
-    // Joker wymaga dokładnie 2 kart nie-Jokerów
     if (hasJoker) {
         const nonJokers = cards.filter(c => c.value !== 'Joker');
         if (nonJokers.length !== 2) return 'Joker wymaga dokładnie 2 dodatkowych kart.';
-        // Nie można: Joker + tylko karty zerowe (2, 8, Joker)
         const nonZero = nonJokers.filter(c => !['2','8','Joker'].includes(c.value));
-        if (nonZero.length === 0) return 'Joker musi zawierać przynajmniej jedną kartę z wartością punktową.';
-        return null; // ok
-    }
-
-    // "2": musi być z dokładnie 1 kartą bazową (nie-zerową lub 8)
-    if (hasTwo) {
-        if (cards.length < 2) return 'Dwójka wymaga drugiej karty.';
-        if (cards.length > 3) return 'Zbyt wiele kart z dwójką.'; // 8+2+karta = 3 max
-        const others = cards.filter(c => c.value !== '2');
-        // Niedozwolone: 2 + same zera (np. 2+8 bez karty bazowej nie ma sensu punktowo,
-        // ale 8+2+As jest ok — 8 odejmuje, 2 podwaja Asa)
-        // Zasada: musi być przynajmniej 1 karta z wartością > 0 poza dwójką
-        const hasBase = others.some(c => !['2','8','Joker'].includes(c.value));
-        if (!hasBase) return 'Dwójka musi zawierać kartę z wartością punktową.';
+        if (nonZero.length === 0) return 'Joker musi zawierać przynajmniej jedną kartę punktową.';
         return null;
     }
 
-    // "8" solo lub 8 + karta(y)
+    if (hasTwo) {
+        // Wariant z ósemką: 8 + 2 + karta_bazowa (3 karty)
+        if (hasEight) {
+            if (cards.length !== 3) return 'Kombinacja 8+2 wymaga dokładnie 3 kart (8, 2, karta punktowa).';
+            const base = cards.filter(c => !['2','8','Joker'].includes(c.value));
+            if (base.length !== 1) return 'Kombinacja 8+2 musi zawierać dokładnie 1 kartę punktową.';
+            return null;
+        }
+        // Wariant bez ósemki: 2 + karta_bazowa (2 karty łącznie)
+        if (cards.length !== 2) return 'Dwójka wymaga dokładnie 1 karty bazowej (łącznie 2 karty).';
+        const other = cards.find(c => c.value !== '2');
+        if (!other || ['2','8','Joker'].includes(other.value)) return 'Dwójka musi być z kartą punktową (3–A).';
+        return null;
+    }
+
     if (hasEight) {
         if (cards.length > 2) return 'Z ósemką można zagrać maksymalnie 1 dodatkową kartę.';
-        // Nie można: 8 + Joker (oba zerowe bez sensu)
         if (cards.length === 2) {
             const other = cards.find(c => c.value !== '8');
-            if (other && ['Joker','8'].includes(other.value)) {
-                return 'Ósemka może być połączona tylko z kartą punktową.';
-            }
+            if (other && ['Joker','8','2'].includes(other.value)) return 'Ósemka może być z kartą punktową (3–A) tylko.';
         }
         return null;
     }
 
-    // Normalna karta solo
     if (cards.length > 1) return 'Zwykłą kartę można zagrać solo.';
     return null;
+}
+
+// ── SPRAWDŹ WYGRANYCH (0 kart w ręce) ────────────────────────────────────────
+function checkWinners() {
+    const winners = players.filter(p => p.hand.length === 0);
+    if (winners.length > 0) {
+        winners.forEach(w => {
+            dbg(`WYGRANA: ${w.name} ma 0 kart`);
+            io.emit('player-won', w.name);
+        });
+        return true;
+    }
+    return false;
 }
 
 io.on('connection', (socket) => {
@@ -103,7 +111,7 @@ io.on('connection', (socket) => {
     socket.on('join', (name) => {
         if (gameStarted) return;
         players.push({ id: socket.id, name, hand: [], hasPlayed: false, currentCombo: [], target: null, sksUsed: false, waitingForTarget: false });
-        dbg(`JOIN: ${name}, gracze: ${players.map(p=>p.name).join(', ')}`);
+        dbg(`JOIN: ${name}`);
         updatePlayerList();
     });
 
@@ -120,10 +128,7 @@ io.on('connection', (socket) => {
         currentPlayerIdx = 0;
         pendingBlefPickup = null;
         if (roundTimer) { clearInterval(roundTimer); roundTimer = null; }
-        players.forEach(p => {
-            p.hand = []; p.hasPlayed = false; p.sksUsed = false;
-            p.currentCombo = []; p.target = null; p.waitingForTarget = false;
-        });
+        players.forEach(p => { p.hand = []; p.hasPlayed = false; p.sksUsed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
         io.emit('reset-client-ui');
         updatePlayerList();
     });
@@ -148,7 +153,6 @@ io.on('connection', (socket) => {
         io.emit('game-begun');
         io.emit('clear-table');
         io.emit('update-status', `ZACZYNA: ${players[currentPlayerIdx].name}`);
-        dbg(`RESET GRY. Gracz startowy: ${players[currentPlayerIdx].name}`);
         updatePlayerList();
         broadcastDebug();
     }
@@ -160,19 +164,15 @@ io.on('connection', (socket) => {
         const p = players[pIdx];
         if (!p) return;
 
-        dbg(`PLAY-COMBO od ${p.name}: ${JSON.stringify(cards)}, target: ${target}, currentPlayerIdx: ${currentPlayerIdx}, pIdx: ${pIdx}, hasPlayed: ${p.hasPlayed}`);
+        dbg(`PLAY-COMBO od ${p.name}: ${cards.map(c=>c.value+c.suit).join('+')}, target:${target}, cur:${currentPlayerIdx}, pIdx:${pIdx}`);
 
         if (!gameStarted || p.hasPlayed || pIdx !== currentPlayerIdx) {
-            socket.emit('error-msg', `To nie Twoja tura! (current: ${players[currentPlayerIdx]?.name}, ty: ${p.name})`);
-            dbg(`ODRZUCONO: gameStarted=${gameStarted}, hasPlayed=${p.hasPlayed}, pIdx=${pIdx}, currentPlayerIdx=${currentPlayerIdx}`);
-            return;
+            socket.emit('error-msg', `To nie Twoja tura! (current: ${players[currentPlayerIdx]?.name})`); return;
         }
 
-        // Walidacja kombinacji
         const comboErr = validateCombo(cards);
         if (comboErr) { socket.emit('error-msg', comboErr); return; }
 
-        // Weryfikacja posiadania kart
         const handCopy = [...p.hand];
         for (const card of cards) {
             const i = handCopy.findIndex(c => c.value === card.value && c.suit === card.suit);
@@ -187,28 +187,20 @@ io.on('connection', (socket) => {
         p.currentCombo = [...cards];
         p.target = target || null;
 
-        // Wykrycie blefu
         const maxHandVal  = p.hand.length > 0 ? Math.max(...p.hand.map(c => cardValues[c.value] || 0)) : 0;
         const comboMaxVal = Math.max(...cards.map(c => cardValues[c.value] || 0));
         lastMoveWasBlef = comboMaxVal < maxHandVal;
         lastPlayerIdx = pIdx;
         canCheckBlef = true;
 
-        dbg(`${p.name} zagrywa. blef=${lastMoveWasBlef}`);
+        dbg(`${p.name} zagrywa. ręka po: ${p.hand.length} kart. blef=${lastMoveWasBlef}`);
         io.to(p.id).emit('init-hand', p.hand);
 
-        // ── KLUCZOWA POPRAWKA ────────────────────────────────────────────────
-        // Jeśli w combo jest ósemka ale target nie jest jeszcze podany,
-        // NIE finalizuj tury — ustaw flagę i poczekaj na target-selected.
-        // Dzięki temu currentPlayerIdx NIE przesuwa się i następny gracz
-        // nie dostaje błędu "to nie Twoja tura".
         const needsTarget = cards.some(c => c.value === '8') && !target;
         if (needsTarget) {
-            dbg(`${p.name} zagrywa ósemkę — czeka na cel. Tura NIE przesuwa się.`);
             p.waitingForTarget = true;
-            // Wyślij menu celu z serwera (na wypadek gdyby klient sam nie pokazał)
-            // Klient powinien już pokazać menu, ale serwer też może je wysłać
-            return; // czekamy na target-selected
+            dbg(`${p.name} czeka na cel dla ósemki`);
+            return;
         }
 
         finishTurn(p);
@@ -229,32 +221,63 @@ io.on('connection', (socket) => {
         const checker  = players[checkerIdx];
         if (!attacker || !checker) return;
 
-        dbg(`BLEF: ${checker.name} sprawdza ${attacker.name}. Był blef: ${lastMoveWasBlef}`);
+        dbg(`BLEF: ${checker.name} sprawdza ${attacker.name}. blef=${lastMoveWasBlef}, ręka attackera: ${attacker.hand.length}`);
         io.emit('reveal-blef-anim', { player: attacker.name, cards: attacker.currentCombo });
-        pendingBlefPickup = { attackerIdx: lastPlayerIdx, checkerIdx, wasBlef: lastMoveWasBlef };
 
         replenish(20);
         const pool = gameDeck.splice(0, 10);
 
         if (lastMoveWasBlef) {
+            // ── BLEF ZŁAPANY ─────────────────────────────────────────────────
             io.emit('update-status', `🚨 ${checker.name} złapał ${attacker.name} na blefie!`);
             const autoCount = Math.max(0, attacker.hand.length - 2);
             replenish(autoCount + 4);
             attacker.hand = gameDeck.splice(0, autoCount + 4);
             io.to(attacker.id).emit('init-hand', attacker.hand);
+            pendingBlefPickup = { attackerIdx: lastPlayerIdx, checkerIdx, wasBlef: true };
             io.to(checker.id).emit('show-pick-menu', {
                 pool, count: 2, targetIdx: lastPlayerIdx,
                 title: `🎯 Złapałeś ${attacker.name}! Wybierz mu 2 NAJGORSZE karty:`
             });
+
         } else {
+            // ── NIE BYŁO BLEFA ───────────────────────────────────────────────
+            // Sprawdź: czy atakujący zagrał ostatnie karty (ręka = 0)?
+            // Jeśli tak — wygrał, nie dobiera kart.
+            if (attacker.hand.length === 0) {
+                dbg(`${attacker.name} zagrał ostatnie karty i nie blefował — WYGRANA`);
+                io.emit('update-status', `🏆 ${attacker.name} zagrał ostatnią kartę i nie kłamał!`);
+                checker.hand.push(...gameDeck.splice(0, 4));
+                io.to(checker.id).emit('init-hand', checker.hand);
+                // Ogłoś wygraną
+                io.emit('player-won', attacker.name);
+                // Reset stołu
+                setTimeout(() => {
+                    const allOnTable = tableCards.flatMap(m => m.cards);
+                    gameDeck.push(...allOnTable.filter(c => c.value !== 'Joker'));
+                    tableCards = [];
+                    players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
+                    currentPlayerIdx = checkerIdx;
+                    if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
+                    io.emit('clear-table');
+                    updatePlayerList();
+                    players.forEach(p => io.to(p.id).emit('init-hand', p.hand));
+                    broadcastDebug();
+                }, 2000);
+                return;
+            }
+
+            // Normalny przypadek: atakujący ma karty, nie blefował
             io.emit('update-status', `✅ ${attacker.name} nie kłamał! ${checker.name} dostaje 4 karne.`);
             replenish(4);
             checker.hand.push(...gameDeck.splice(0, 4));
             io.to(checker.id).emit('init-hand', checker.hand);
+            // Atakujący wymienia karty i wybiera sobie 2 z puli
             const autoCount = Math.max(0, attacker.hand.length - 2);
             replenish(autoCount);
             attacker.hand = gameDeck.splice(0, autoCount);
             io.to(attacker.id).emit('init-hand', attacker.hand);
+            pendingBlefPickup = { attackerIdx: lastPlayerIdx, checkerIdx, wasBlef: false };
             io.to(attacker.id).emit('show-pick-menu', {
                 pool, count: 2, targetIdx: lastPlayerIdx,
                 title: `🤩 Nie kłamałeś! Wybierz sobie 2 NAJLEPSZE karty:`
@@ -279,6 +302,17 @@ io.on('connection', (socket) => {
         updatePlayerList();
         pendingBlefPickup = null;
 
+        // Sprawdź wygrane po rozdaniu kart
+        if (checkWinners()) {
+            setTimeout(() => {
+                tableCards = [];
+                players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
+                io.emit('clear-table');
+                updatePlayerList();
+            }, 1500);
+            return;
+        }
+
         setTimeout(() => {
             if (players.length === 0) return;
             const allOnTable = tableCards.flatMap(m => m.cards);
@@ -302,15 +336,13 @@ io.on('connection', (socket) => {
         const p = players[pIdx];
         if (!p) { advanceSks(); return; }
 
-        dbg(`SKS od ${p.name}: decision=${decision}, sksUsed=${p.sksUsed}`);
-
         if (decision && !p.sksUsed) {
             p.sksUsed = true;
             replenish(1);
             const sksCard = gameDeck.shift();
             if (!sksCard) { advanceSks(); return; }
 
-            dbg(`${p.name} losuje SKS: ${sksCard.value}${sksCard.suit}`);
+            dbg(`${p.name} SKS: ${sksCard.value}${sksCard.suit}`);
             const tableMove = tableCards.find(m => m.playerIdx === pIdx);
 
             if (sksCard.value === 'Joker') {
@@ -347,11 +379,7 @@ io.on('connection', (socket) => {
         });
     }
 
-    function advanceSks() {
-        sksResponses++;
-        dbg(`SKS responses: ${sksResponses}/${players.length}`);
-        checkAllSks();
-    }
+    function advanceSks() { sksResponses++; checkAllSks(); }
 
     function checkAllSks() {
         if (sksResponses >= players.length) {
@@ -367,15 +395,11 @@ io.on('connection', (socket) => {
         io.emit('reveal-detailed', res.map(r => ({ name: r.playerName, cards: r.m.cards, finalPower: r.power })));
     }
 
-    // ── TARGET SELECTED ───────────────────────────────────────────────────────
-
     socket.on('target-selected', (targetName) => {
         const p = players.find(pl => pl.id === socket.id);
         if (!p) return;
         const pIdx = players.indexOf(p);
-        dbg(`TARGET od ${p.name}: ${targetName}, hasPlayed=${p.hasPlayed}, waitingForTarget=${p.waitingForTarget}`);
 
-        // SKS ósemka
         const tableMove = tableCards.find(m => m.playerIdx === pIdx);
         if (tableMove && tableMove.sksEights) {
             const unassigned = tableMove.sksEights.find(e => e.target === null);
@@ -383,13 +407,10 @@ io.on('connection', (socket) => {
         }
 
         if (!p.hasPlayed) {
-            // Gracz dopiero zagrał z ósemką — teraz finalizuj turę
             p.target = targetName;
             p.waitingForTarget = false;
-            dbg(`${p.name} wybrał cel ${targetName} — finiszTurn`);
             finishTurn(p);
         } else {
-            // SKS ósemka po turze
             refreshTableFor(pIdx);
             advanceSks();
         }
@@ -416,15 +437,12 @@ io.on('connection', (socket) => {
         p.hasPlayed = true;
         p.waitingForTarget = false;
         tableCards.push({
-            playerIdx: players.indexOf(p),
-            playerName: p.name,
-            cards: [...p.currentCombo],
-            target: p.target,
-            sksEights: []
+            playerIdx: players.indexOf(p), playerName: p.name,
+            cards: [...p.currentCombo], target: p.target, sksEights: []
         });
 
         currentPlayerIdx = (currentPlayerIdx + 1) % players.length;
-        dbg(`finishTurn: ${p.name} skończył. Następny: ${players[currentPlayerIdx]?.name} (idx ${currentPlayerIdx}). Stół: ${tableCards.length}/${players.length}`);
+        dbg(`finishTurn: ${p.name}. Następny: ${players[currentPlayerIdx]?.name}. Stół: ${tableCards.length}/${players.length}`);
 
         players.forEach(pl => {
             const plIdx = players.indexOf(pl);
@@ -438,7 +456,6 @@ io.on('connection', (socket) => {
         if (tableCards.length === players.length) {
             canCheckBlef = false;
             io.emit('update-status', '🔍 Wszyscy zagrali! Rozstrzyganie...');
-            dbg('Wszyscy zagrali — resolveRound');
             setTimeout(() => resolveRound(), 1500);
         } else {
             io.emit('update-status', `Tura: ${players[currentPlayerIdx].name}`);
@@ -461,7 +478,6 @@ io.on('connection', (socket) => {
             playerIdx: m.playerIdx, playerName: m.playerName,
             power: calculatePower(m.cards), m: m
         }));
-
         tableCards.forEach(move => {
             move.cards.forEach((card, cardIdx) => {
                 if (card.value !== '8') return;
@@ -476,13 +492,12 @@ io.on('connection', (socket) => {
                 }
             });
         });
-
         return res;
     }
 
     function resolveRound() {
         const res = calcResults();
-        dbg('resolveRound wyniki:', res.map(r => `${r.playerName}:${r.power}`).join(', '));
+        dbg('resolveRound:', res.map(r => `${r.playerName}:${r.power}`).join(', '));
         io.emit('reveal-detailed', res.map(r => ({ name: r.playerName, cards: r.m.cards, finalPower: r.power })));
 
         const maxP = Math.max(...res.map(r => r.power));
@@ -494,7 +509,6 @@ io.on('connection', (socket) => {
             wasBulaInRound = true;
             const names = top.map(t => t.playerName).join(' i ');
             io.emit('update-status', `⚔️ BUŁA między: ${names}! Dogrywka...`);
-            dbg(`BUŁA: ${names}`);
             top.forEach(t => {
                 replenish(2);
                 const ex = gameDeck.splice(0, 2);
@@ -524,11 +538,16 @@ io.on('connection', (socket) => {
 
             io.to(players[loser.playerIdx].id).emit('init-hand', players[loser.playerIdx].hand);
             wasBulaInRound = false;
-            // sksUsed NIE jest resetowane (raz na grę)
             players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
             tableCards = [];
             updatePlayerList();
-            dbg('Koniec rundy — SKS modal za 2s');
+
+            // Sprawdź wygrane po rozdaniu kart przegranemu
+            if (checkWinners()) {
+                broadcastDebug();
+                return;
+            }
+
             broadcastDebug();
             setTimeout(() => io.emit('show-sks-modal'), 2000);
         }
@@ -555,21 +574,15 @@ io.on('connection', (socket) => {
         })));
     }
 
-    // ── DEBUG BROADCAST ───────────────────────────────────────────────────────
     function broadcastDebug() {
         if (!DEBUG) return;
-        const state = {
+        io.emit('debug-state', {
             gameStarted, currentPlayerIdx,
             currentPlayer: players[currentPlayerIdx]?.name || '?',
-            tableCards: tableCards.map(m => ({ player: m.playerName, cards: m.cards.map(c => `${c.value}${c.suit}`).join('+'), target: m.target })),
-            players: players.map(p => ({
-                name: p.name, handCount: p.hand.length,
-                hasPlayed: p.hasPlayed, sksUsed: p.sksUsed,
-                waitingForTarget: p.waitingForTarget
-            })),
+            tableCards: tableCards.map(m => ({ player: m.playerName, cards: m.cards.map(c=>`${c.value}${c.suit}`).join('+'), target: m.target })),
+            players: players.map(p => ({ name: p.name, handCount: p.hand.length, hasPlayed: p.hasPlayed, sksUsed: p.sksUsed, waitingForTarget: p.waitingForTarget })),
             canCheckBlef, wasBulaInRound, sksResponses
-        };
-        io.emit('debug-state', state);
+        });
     }
 
     socket.on('disconnect', () => {
@@ -577,12 +590,8 @@ io.on('connection', (socket) => {
         if (idx !== -1) {
             dbg(`DISCONNECT: ${players[idx].name}`);
             players.splice(idx, 1);
-            if (players.length === 0) {
-                gameStarted = false; currentPlayerIdx = 0;
-                if (roundTimer) { clearInterval(roundTimer); roundTimer = null; }
-            } else {
-                if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
-            }
+            if (players.length === 0) { gameStarted = false; currentPlayerIdx = 0; if (roundTimer) { clearInterval(roundTimer); roundTimer = null; } }
+            else if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
         }
         updatePlayerList();
         broadcastDebug();
