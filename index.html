@@ -1,273 +1,514 @@
 <!DOCTYPE html>
+
 <html lang="pl">
+
 <head>
+
     <meta charset="UTF-8">
+
     <title>MACHNOWIAK 2.0</title>
+
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
     <style>
+
         :root { --bg: #0f0c29; --accent: #3498db; --gold: #f1c40f; --danger: #e74c3c; }
+
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+
         
+
         #sidebar { width: 220px; background: rgba(0,0,0,0.8); border-right: 2px solid var(--accent); padding: 20px; display: flex; flex-direction: column; }
+
         .player-card { background: rgba(255,255,255,0.05); padding: 10px; margin: 5px 0; border-radius: 8px; border-left: 4px solid transparent; }
+
         .player-card.active { border-left-color: var(--gold); }
 
+
+
         #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 20px; position: relative; }
+
         #stół { 
+
             background: rgba(255,255,255,0.03); width: 95%; height: 420px; border-radius: 30px; 
+
             border: 2px dashed #444; display: flex; justify-content: center; align-items: flex-start; 
+
             gap: 60px; padding-top: 80px; position: relative;
+
         }
+
+
 
         .card-stack { position: relative; width: 90px; height: 130px; transition: 0.3s; }
+
         .stack-info { position: absolute; top: -70px; width: 140px; left: 50%; transform: translateX(-50%); text-align: center; color: var(--gold); font-weight: bold; }
 
+
+
         .karta { 
+
             width: 90px; height: 130px; background: white; color: black; border-radius: 10px; 
+
             border: 2px solid #222; position: absolute; box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
+
             display: block; padding: 0; box-sizing: border-box; overflow: hidden;
+
         }
-        /* Styl dla zaznaczonej karty przy Jokerze/2 */
-        .karta.selected { border: 4px solid var(--gold); transform: translateY(-20px); z-index: 100; }
 
         .karta .val { position: absolute; top: 5px; left: 8px; font-weight: 900; font-size: 1.3rem; line-height: 1; }
+
         .karta .suit { position: absolute; top: 25px; left: 8px; font-size: 1rem; }
+
         .karta.red { color: var(--danger); }
+
         .karta.zakryta { background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); color: transparent; border: 1px solid white; }
 
+
+
         .karta:nth-child(2) { top: 45px; } 
+
         .karta:nth-child(3) { top: 90px; } 
+
         .karta:nth-child(4) { top: 135px; } 
+
         .karta:nth-child(5) { top: 180px; }
+
+        .karta:nth-child(n+6) { top: 225px; }
+
+
 
         #bottom-panel { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; width: 90%; padding: 10px; margin-top: auto; position: relative; }
 
+
+
         #sks-panel { 
+
             display: none; background: rgba(0,0,0,0.7); border: 3px solid var(--gold); 
+
             padding: 20px; border-radius: 15px; text-align: center; width: 200px;
+
         }
 
+
+
         #reka-container { flex-grow: 1; text-align: center; }
+
         #reka { display: flex; gap: 10px; padding: 10px; flex-wrap: wrap; justify-content: center; min-height: 150px; }
+
         #reka .karta { position: relative; cursor: pointer; transition: 0.2s; top: 0 !important; }
+
+
 
         .main-actions { position: absolute; top: -50px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; width: 100%; justify-content: center; }
 
+
+
         button { padding: 12px 25px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
+
         .btn-start { background: #27ae60; color: white; }
+
         .btn-blef { background: var(--danger); color: white; }
+
         .btn-reset { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; z-index: 1000; }
 
-        #pick-menu, #target-menu { 
+
+
+        /* POPRAWIONE CENTROWANIE OKIENEK */
+
+        #pick-menu { 
+
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+
             background: #1a1a2e; border: 4px solid var(--gold); padding: 30px; border-radius: 20px; 
-            z-index: 9999; text-align: center; box-shadow: 0 0 50px rgba(0,0,0,0.9);
+
+            z-index: 9999; width: auto; min-width: 400px; max-width: 90vw; text-align: center;
+
+            box-shadow: 0 0 50px rgba(0,0,0,0.9);
+
         }
-        #pick-cards-grid { display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 20px; }
+
+        #pick-cards-grid { 
+
+            display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 20px; min-height: 150px;
+
+        }
+
         #pick-cards-grid .karta { position: relative; top: 0 !important; cursor: pointer; }
+
+
+
+        #target-menu { 
+
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+
+            background: #1a1a2e; border: 3px solid var(--gold); padding: 30px; border-radius: 20px; 
+
+            z-index: 9999; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.8);
+
+            min-width: 300px;
+
+        }
+
+        
+
         #timer-box { font-size: 1.5rem; color: var(--gold); font-weight: bold; }
+
     </style>
+
 </head>
+
 <body>
+
     <div id="sidebar">
+
         <h2>👥 GRACZE</h2>
+
         <div id="player-list"></div>
+
     </div>
+
+
 
     <div id="game-area">
+
         <button class="btn-reset" onclick="socket.emit('new-game-request')">NOWA GRA (RESET)</button>
+
         <h1>⚔️ MACHNOWIAK 2.0</h1>
+
         <div id="timer-box"></div>
+
         <h2 id="status" style="color:var(--gold); height: 30px;"></h2>
+
         
+
         <div id="stół"></div>
 
+
+
         <div id="bottom-panel">
+
             <div id="sks-panel">
+
                 <h3>🔥 UŻYĆ SKS?</h3>
+
                 <div style="display:flex; gap:10px; justify-content:center;">
+
                     <button style="background:var(--gold)" onclick="sendSks(true)">TAK</button>
+
                     <button style="background:#444; color:white;" onclick="sendSks(false)">NIE</button>
+
                 </div>
+
             </div>
+
+
 
             <div id="reka-container">
+
                 <div class="main-actions">
+
                     <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')">START GRY</button>
+
                     <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
+
                 </div>
+
                 <h3>TWOJA RĘKA:</h3>
+
                 <div id="reka"></div>
+
             </div>
+
         </div>
+
+
 
         <div id="pick-menu">
+
             <h3 id="pick-title" style="font-size: 1.5rem; color: var(--gold); margin-top: 0;"></h3>
+
             <div id="pick-cards-grid"></div>
+
         </div>
+
+
 
         <div id="target-menu">
+
             <h3 style="color: var(--gold); margin-top: 0;">🎯 Wybierz cel:</h3>
+
             <div id="target-list" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;"></div>
+
         </div>
+
     </div>
 
+
+
     <script>
+
         const socket = io();
+
         let mySksUsedLocally = false;
-        let pendingSelection = []; // Przechowuje karty do wysłania (Joker/2)
+
+
 
         window.onload = () => {
+
             const nick = prompt("Twój Nick:");
-            // autocomplete="off" dodany w logice prompta/inputa
-            if(nick) socket.emit('join', nick.trim());
+
+            if(nick) socket.emit('join', nick);
+
         };
+
+
 
         socket.on('error-msg', msg => alert(msg));
 
+
+
         socket.on('update-timer', time => {
+
             document.getElementById('timer-box').innerText = time > 0 ? `NOWA RUNDA ZA: ${time}s` : "";
+
         });
+
+
 
         socket.on('update-player-list', list => {
+
             document.getElementById('player-list').innerHTML = list.map(p => `
+
                 <div class="player-card ${p.isCurrent ? 'active' : ''}">
+
                     <strong>${p.name}</strong><br>Karty: ${p.count} ${p.sksUsed ? '🚫' : ''}
+
                 </div>
+
             `).join('');
+
         });
+
+
 
         socket.on('update-table-hidden', data => {
+
             const stol = document.getElementById('stół');
+
             stol.innerHTML = '';
+
             data.forEach(p => {
+
                 const stack = document.createElement('div');
+
                 stack.className = 'card-stack';
+
                 stack.innerHTML = `<div class="stack-info">${p.playerName}</div>`;
+
                 if (p.cards === null) {
+
                     const rev = document.createElement('div');
+
                     rev.className = 'karta zakryta';
+
                     stack.appendChild(rev);
+
                 } else {
+
                     p.cards.forEach(c => stack.appendChild(createCardElement(c)));
+
                 }
+
                 stol.appendChild(stack);
+
             });
+
         });
+
+
 
         socket.on('reveal-detailed', data => {
+
             const stol = document.getElementById('stół');
+
             stol.innerHTML = '';
+
             data.forEach(p => {
+
                 const stack = document.createElement('div');
+
                 stack.className = 'card-stack';
+
                 stack.innerHTML = `<div class="stack-info">${p.name}<br>${p.finalPower} pkt</div>`;
+
                 p.cards.forEach(c => stack.appendChild(createCardElement(c)));
+
                 stol.appendChild(stack);
+
             });
+
         });
+
+
 
         function createCardElement(k) {
+
             const div = document.createElement('div');
+
             const isRed = k.suit === '♥' || k.suit === '♦';
+
             div.className = `karta ${isRed ? 'red' : ''}`;
+
             div.innerHTML = `<span class="val">${k.value}</span><span class="suit">${k.value === 'Joker' ? '🃏' : k.suit}</span>`;
+
             return div;
+
         }
+
+
 
         socket.on('init-hand', hand => {
+
             const reka = document.getElementById('reka');
+
             reka.innerHTML = '';
-            pendingSelection = []; // Reset przy nowej ręce
+
             hand.forEach(k => {
+
                 const div = createCardElement(k);
-                div.onclick = () => handleCardClick(k, div);
+
+                div.onclick = () => socket.emit('play-card', k);
+
                 reka.appendChild(div);
+
             });
+
         });
 
-        function handleCardClick(k, div) {
-            // Jeśli już wybraliśmy tę kartę, nic nie rób
-            if (pendingSelection.includes(k)) return;
 
-            pendingSelection.push(k);
-            div.classList.add('selected');
-
-            // Logika wielokrotnego wyboru
-            const hasJoker = pendingSelection.some(c => c.value === 'Joker');
-            const hasTwo = pendingSelection.some(c => c.value === '2');
-            
-            let limit = 1;
-            if (hasJoker) limit = 3;
-            else if (hasTwo) limit = 2;
-
-            if (pendingSelection.length === limit) {
-                // Jeśli osiągnęliśmy limit, wysyłamy wszystko na raz
-                socket.emit('play-cards-multi', pendingSelection);
-                pendingSelection = [];
-            }
-        }
 
         socket.on('show-sks-modal', () => {
+
             if (!mySksUsedLocally) document.getElementById('sks-panel').style.display = 'block';
+
             else socket.emit('sks-decision', false);
+
         });
+
+
 
         function sendSks(v) {
+
             if(v) mySksUsedLocally = true;
+
             socket.emit('sks-decision', v);
+
             document.getElementById('sks-panel').style.display = 'none';
+
         }
 
+
+
         socket.on('update-status', msg => document.getElementById('status').innerText = msg);
+
         socket.on('clear-table', () => {
+
             document.getElementById('stół').innerHTML = '';
+
             document.getElementById('timer-box').innerText = "";
+
         });
+
         
+
         socket.on('game-begun', () => document.getElementById('start-btn').style.display = 'none');
+
         
+
         socket.on('reset-client-ui', () => {
+
             document.getElementById('start-btn').style.display = 'block';
+
             document.getElementById('stół').innerHTML = '';
+
             document.getElementById('reka').innerHTML = '';
+
             document.getElementById('pick-menu').style.display = 'none';
+
             document.getElementById('timer-box').innerText = "";
+
             document.getElementById('status').innerText = "Czekaj na start...";
+
             mySksUsedLocally = false;
-            pendingSelection = [];
+
         });
+
+
 
         socket.on('show-pick-menu', data => {
+
             const menu = document.getElementById('pick-menu');
+
             const grid = document.getElementById('pick-cards-grid');
+
             document.getElementById('pick-title').innerText = data.title;
+
             menu.style.display = 'block'; grid.innerHTML = '';
+
             let selected = [];
+
             data.pool.forEach(k => {
+
                 const d = createCardElement(k);
+
                 d.onclick = () => {
+
                     d.style.border = "5px solid gold"; selected.push(k);
+
                     if(selected.length === data.count) {
+
                         socket.emit('pick-finished', { pickedCards: selected, targetIdx: data.targetIdx });
+
                         menu.style.display = 'none';
+
                     }
+
                 };
+
                 grid.appendChild(d);
+
             });
+
         });
 
+
+
         socket.on('show-target-menu', targets => {
+
             const menu = document.getElementById('target-menu');
+
             const list = document.getElementById('target-list');
+
             menu.style.display = 'block'; list.innerHTML = '';
+
             targets.forEach(t => {
+
                 const b = document.createElement('button');
+
                 b.innerText = t; b.className = "btn-start"; b.style.margin = "5px";
+
                 b.onclick = () => { socket.emit('target-selected', t); menu.style.display = 'none'; };
+
                 list.appendChild(b);
+
             });
+
         });
+
     </script>
+
 </body>
+
 </html>
+
