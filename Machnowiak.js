@@ -42,11 +42,13 @@ function replenish(needed) {
 
 // ── WALIDACJA COMBO ───────────────────────────────────────────────────────────
 // Zasady:
-//   Joker  = Joker + dokładnie 2 karty (przynajmniej 1 punktowa)
-//   "2"    = "2" + dokładnie 1 karta punktowa (opcjonalnie + "8") — max 2 karty łącznie
-//            LUB "8" + "2" + karta punktowa — max 3 karty
-//   "8"    = "8" solo LUB "8" + 1 karta punktowa — max 2 karty
-//   normalna = solo
+//   solo          = 1 karta punktowa (3–A)
+//   8 + base      = ósemka + 1 karta punktowa; 8 odejmuje punkty celowi
+//   2 + base      = dwójka + 1 karta punktowa; podwaja siłę
+//   8 + 2 + base  = ósemka + dwójka + 1 karta punktowa; obie zasady
+//   Joker + x + y = Joker + 2 karty (min 1 punktowa)
+//   8 + Joker + x + y           = ósemka + Joker + 2 bazowe (4 karty)
+//   8 + 2 + Joker + x + y       = ósemka + dwójka + Joker + 2 bazowe (5 kart)
 function validateCombo(cards) {
     if (cards.length === 0) return 'Puste combo.';
 
@@ -57,6 +59,16 @@ function validateCombo(cards) {
 
     if (jokerCount > 1) return 'Nie można zagrać dwóch Jokerów naraz.';
 
+    // ── Nowe combo: 8 (+ opcjonalnie 2) + Joker + 2 karty bazowe ─────────────
+    if (hasJoker && hasEight) {
+        const base = cards.filter(c => !['2','8','Joker'].includes(c.value));
+        if (base.length !== 2) return 'Combo z Jokerem i ósemką wymaga dokładnie 2 kart punktowych.';
+        const expected = hasTwo ? 5 : 4;
+        if (cards.length !== expected)
+            return `Combo ${hasTwo ? '8+2+Joker' : '8+Joker'} wymaga dokładnie ${expected} kart.`;
+        return null;
+    }
+
     if (hasJoker) {
         const nonJokers = cards.filter(c => c.value !== 'Joker');
         if (nonJokers.length !== 2) return 'Joker wymaga dokładnie 2 dodatkowych kart.';
@@ -66,14 +78,12 @@ function validateCombo(cards) {
     }
 
     if (hasTwo) {
-        // Wariant z ósemką: 8 + 2 + karta_bazowa (3 karty)
         if (hasEight) {
             if (cards.length !== 3) return 'Kombinacja 8+2 wymaga dokładnie 3 kart (8, 2, karta punktowa).';
             const base = cards.filter(c => !['2','8','Joker'].includes(c.value));
             if (base.length !== 1) return 'Kombinacja 8+2 musi zawierać dokładnie 1 kartę punktową.';
             return null;
         }
-        // Wariant bez ósemki: 2 + karta_bazowa (2 karty łącznie)
         if (cards.length !== 2) return 'Dwójka wymaga dokładnie 1 karty bazowej (łącznie 2 karty).';
         const other = cards.find(c => c.value !== '2');
         if (!other || ['2','8','Joker'].includes(other.value)) return 'Dwójka musi być z kartą punktową (3–A).';
@@ -82,10 +92,10 @@ function validateCombo(cards) {
 
     if (hasEight) {
         if (cards.length === 1) return 'Ósemka musi być zagrana z kartą punktową (3–A).';
-        if (cards.length > 2) return 'Z ósemką można zagrać maksymalnie 1 dodatkową kartę.';
+        if (cards.length > 2) return 'Z ósemką można zagrać max 1 dodatkową kartę (lub użyj Jokera).';
         if (cards.length === 2) {
             const other = cards.find(c => c.value !== '8');
-            if (other && ['Joker','8','2'].includes(other.value)) return 'Ósemka może być z kartą punktową (3–A) tylko.';
+            if (other && ['8','2'].includes(other.value)) return 'Ósemka + karta punktowa (3–A) tylko.';
         }
         return null;
     }
@@ -331,6 +341,23 @@ io.on('connection', (socket) => {
         }, 1500);
     });
 
+    // ── DOBIERZ KARTĘ ─────────────────────────────────────────────────────────
+
+    socket.on('draw-card', () => {
+        const pIdx = players.findIndex(pl => pl.id === socket.id);
+        const p = players[pIdx];
+        if (!p || !gameStarted || p.hasPlayed || pIdx !== currentPlayerIdx) return;
+        replenish(1);
+        const card = gameDeck.shift();
+        if (card) {
+            p.hand.push(card);
+            io.to(p.id).emit('init-hand', p.hand);
+            io.emit('update-status', `${p.name} dobrał kartę. Tura: ${p.name}`);
+            updatePlayerList();
+            broadcastDebug();
+        }
+    });
+
     // ── SKS ───────────────────────────────────────────────────────────────────
 
     socket.on('sks-decision', (decision) => {
@@ -455,8 +482,12 @@ io.on('connection', (socket) => {
 
         if (tableCards.length === players.length) {
             canCheckBlef = false;
-            io.emit('update-status', '🔍 Wszyscy zagrali! SKS...');
-            setTimeout(() => showSksToEligible(), 1500);
+            io.emit('update-status', '🔍 Wszyscy zagrali! Odkrywanie kart...');
+            recalcAndShowTable();
+            setTimeout(() => {
+                io.emit('update-status', 'SKS — użyj swojej szansy!');
+                showSksToEligible();
+            }, 2000);
         } else {
             io.emit('update-status', `Tura: ${players[currentPlayerIdx].name}`);
         }
@@ -535,14 +566,15 @@ io.on('connection', (socket) => {
             const all   = tableCards.flatMap(m => m.cards);
             const valid = all.filter(c => c.value !== 'Joker');
 
+            // Karty ze stołu wracają do talii, przegrany losuje 4 nowe
+            gameDeck.push(...valid);
+            replenish(4);
+            players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
+
             if (wasBulaInRound) {
-                replenish(4);
-                players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
-                gameDeck.push(...valid);
-                io.emit('update-status', `💀 Po dogrywce przegrywa ${loser.playerName} (${loser.power} pkt) i bierze 4 karne!`);
+                io.emit('update-status', `💀 Po dogrywce przegrywa ${loser.playerName} (${loser.power} pkt) i bierze 4 karne z talii!`);
             } else {
-                players[loser.playerIdx].hand.push(...valid);
-                io.emit('update-status', `🃏 Rundę przegrywa ${loser.playerName} (${loser.power} pkt) i zbiera karty!`);
+                io.emit('update-status', `🃏 Rundę przegrywa ${loser.playerName} (${loser.power} pkt) i bierze 4 karty z talii!`);
             }
 
             io.to(players[loser.playerIdx].id).emit('init-hand', players[loser.playerIdx].hand);

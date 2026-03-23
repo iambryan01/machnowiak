@@ -85,6 +85,7 @@
         .btn-blef   { background: var(--danger); color: white; }
         .btn-play   { background: var(--gold); color: #222; }
         .btn-cancel { background: #555; color: white; font-size: 0.78rem; padding: 8px 14px; }
+        .btn-draw   { background: #8e44ad; color: white; font-size: 0.82rem; padding: 8px 14px; }
         .btn-reset  { position: absolute; top: 10px; right: 10px; background: #8e44ad; color: white; z-index: 1000; font-size: 0.82rem; padding: 8px 14px; }
 
         #pick-menu { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #10102a; border: 3px solid var(--gold); padding: 24px; border-radius: 18px; z-index: 9999; min-width: 360px; max-width: 92vw; text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.9); }
@@ -100,6 +101,7 @@
         }
         #win-screen.visible { display: flex; }
         #win-screen h1 { font-size: 3rem; color: var(--gold); margin: 0 0 8px; text-shadow: 0 0 30px var(--gold); }
+        #win-screen h1.lose { color: var(--danger); text-shadow: 0 0 30px var(--danger); }
         #win-screen h2 { font-size: 1.4rem; color: white; margin: 0 0 32px; }
         #win-screen button { background: var(--gold); color: #222; font-size: 1.1rem; padding: 14px 36px; }
 
@@ -139,6 +141,7 @@
             <div class="main-actions">
                 <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')">START GRY</button>
                 <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
+                <button id="draw-btn" class="btn-draw" onclick="drawCard()" style="display:none;">DOBIERZ 🃏</button>
                 <button id="play-btn" class="btn-play" onclick="submitCombo()" style="display:none;">ZAGRAJ ▶</button>
                 <button id="cancel-btn" class="btn-cancel" onclick="cancelCombo()" style="display:none;">✕ ANULUJ</button>
             </div>
@@ -160,7 +163,7 @@
 
 <!-- Ekran wygranej -->
 <div id="win-screen">
-    <h1>🏆 WYGRANA!</h1>
+    <h1 id="win-title">🏆 WYGRANA!</h1>
     <h2 id="win-name"></h2>
     <button onclick="startNewGame()">NOWA GRA</button>
 </div>
@@ -169,11 +172,14 @@
 <div id="debug-panel"><div id="debug-content">brak danych</div></div>
 
 <script>
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
     const socket = io();
     let myNick = null;
     let myHand = [];
     let selectedCards = [];
     let isMyTurn = false;
+    let hasDrawnThisTurn = false;
     let debugVisible = false;
 
     window.onload = () => {
@@ -203,7 +209,16 @@
     // ── EVENTY SERWERA ────────────────────────────────────────────────────────
 
     socket.on('player-won', winnerName => {
-        document.getElementById('win-name').innerText = `${winnerName} wygrał(a) grę! 🎉`;
+        const title = document.getElementById('win-title');
+        if (winnerName === myNick) {
+            title.innerText = '🏆 WYGRANA!';
+            title.className = '';
+            document.getElementById('win-name').innerText = 'Gratulacje!';
+        } else {
+            title.innerText = '😢 PRZEGRAŁEŚ!';
+            title.className = 'lose';
+            document.getElementById('win-name').innerText = `Wygrał(a): ${winnerName}`;
+        }
         document.getElementById('win-screen').classList.add('visible');
     });
 
@@ -219,7 +234,7 @@
             const me = list.find(p => p.name === myNick);
             const wasMyTurn = isMyTurn;
             isMyTurn = me ? me.isCurrent : false;
-            if (isMyTurn && !wasMyTurn) renderHand();
+            if (isMyTurn && !wasMyTurn) { hasDrawnThisTurn = false; renderHand(); }
         }
     });
 
@@ -309,6 +324,7 @@
         document.getElementById('start-btn').style.display = 'inline-block';
         document.getElementById('play-btn').style.display = 'none';
         document.getElementById('cancel-btn').style.display = 'none';
+        document.getElementById('draw-btn').style.display = 'none';
         document.getElementById('combo-info').innerText = '';
         document.getElementById('win-screen').classList.remove('visible');
     });
@@ -335,6 +351,7 @@
 
         document.getElementById('play-btn').style.display   = 'none';
         document.getElementById('cancel-btn').style.display = has ? 'inline-block' : 'none';
+        document.getElementById('draw-btn').style.display   = (isMyTurn && !hasDrawnThisTurn && !has) ? 'inline-block' : 'none';
 
         if (!isMyTurn) { info.innerText = ''; return; }
         if (!has) { info.innerText = '👆 Kliknij kartę aby ją wybrać'; return; }
@@ -344,24 +361,26 @@
             info.innerText = '⚠ ' + err; info.className = 'error'; return;
         }
 
-        // Sprawdź czy combo jest kompletne
         const hasJoker = selectedCards.some(s => s.value === 'Joker');
         const hasTwo   = selectedCards.some(s => s.value === '2');
         const hasEight = selectedCards.some(s => s.value === '8');
+        const baseCount = selectedCards.filter(s => !['2','8','Joker'].includes(s.value)).length;
         const names = selectedCards.map(c => c.value === 'Joker' ? '🃏Joker' : `${c.value}${c.suit}`).join(' + ');
         let hint = `Wybrano: ${names}`;
         let complete = true;
 
-        if (hasJoker) {
+        if (hasJoker && hasEight) {
+            if (baseCount < 2) { hint += ` — wybierz jeszcze ${2 - baseCount} kartę bazową`; complete = false; }
+            else { hint += ' — po zagraniu wybierzesz cel (8)'; }
+        } else if (hasJoker) {
             const nonJ = selectedCards.filter(s => s.value !== 'Joker').length;
-            if (nonJ < 2) { hint += ` — wybierz jeszcze ${2-nonJ} kartę`; complete = false; }
+            if (nonJ < 2) { hint += ` — wybierz jeszcze ${2 - nonJ} kartę`; complete = false; }
+        } else if (hasTwo && hasEight && selectedCards.length < 3) {
+            hint += ' — wybierz kartę bazową lub Jokera'; complete = false;
         } else if (hasTwo && !hasEight && selectedCards.length < 2) {
             hint += ' — wybierz kartę bazową'; complete = false;
-        } else if (hasTwo && hasEight && selectedCards.length < 3) {
-            hint += ' — wybierz kartę bazową do combo 8+2'; complete = false;
         } else if (hasEight && selectedCards.length === 1) {
-            hint += ' — musisz dodać kartę punktową (3–A)';
-            complete = false;
+            hint += ' — dodaj kartę bazową, 2 lub Jokera'; complete = false;
         } else if (hasEight) {
             hint += ' — po zagraniu wybierzesz cel';
         }
@@ -380,6 +399,17 @@
 
         if (jokerCount > 1) return 'Nie można zagrać dwóch Jokerów.';
 
+        // Nowe combo: 8 (+2) + Joker + 2 bazowe
+        if (hasJoker && hasEight) {
+            const base = cards.filter(c => !['2','8','Joker'].includes(c.value));
+            if (base.length > 2) return 'Combo 8+Joker: max 2 karty bazowe.';
+            if (base.length === 2) {
+                const expected = hasTwo ? 5 : 4;
+                if (cards.length !== expected) return `Combo ${hasTwo ? '8+2+Joker' : '8+Joker'} wymaga ${expected} kart.`;
+            }
+            return null; // jeszcze wybiera
+        }
+
         if (hasJoker) {
             const nonJ = cards.filter(c => c.value !== 'Joker').length;
             if (nonJ > 2) return 'Joker + max 2 karty.';
@@ -387,20 +417,18 @@
                 const nonZero = cards.filter(c => !['2','8','Joker'].includes(c.value));
                 if (nonZero.length === 0) return 'Joker musi zawierać kartę punktową.';
             }
-            return null; // jeszcze wybiera
+            return null;
         }
 
         if (hasTwo) {
             if (hasEight) {
-                // 8+2+karta: max 3, gdy jest 3 to sprawdź
-                if (cards.length > 3) return 'Kombinacja 8+2: max 3 karty.';
+                if (cards.length > 3) return 'Kombinacja 8+2: max 3 karty (lub dodaj Jokera).';
                 if (cards.length === 3) {
                     const base = cards.filter(c => !['2','8','Joker'].includes(c.value));
                     if (base.length !== 1) return 'Kombinacja 8+2 wymaga 1 karty punktowej.';
                 }
                 return null;
             }
-            // Sama dwójka: dokładnie 2 karty
             if (cards.length > 2) return 'Dwójka + tylko 1 karta bazowa (łącznie 2).';
             if (cards.length === 2) {
                 const other = cards.find(c => c.value !== '2');
@@ -410,11 +438,11 @@
         }
 
         if (hasEight) {
-            if (cards.length === 1) return 'Ósemka wymaga dodatkowej karty punktowej (3–A).';
+            if (cards.length === 1) return 'Ósemka wymaga dodatkowej karty (3–A lub Joker).';
             if (cards.length > 2) return 'Z 8 można zagrać max 1 dodatkową kartę.';
             if (cards.length === 2) {
                 const other = cards.find(c => c.value !== '8');
-                if (other && ['Joker','8','2'].includes(other.value)) return 'Ósemka + karta punktowa (3–A) tylko.';
+                if (other && ['8','2'].includes(other.value)) return 'Ósemka + karta punktowa (3–A) lub Joker.';
             }
             return null;
         }
@@ -435,37 +463,39 @@
         const hasTwo    = selectedCards.some(s => s.value === '2');
         const hasEight  = selectedCards.some(s => s.value === '8');
         const hasNormal = selectedCards.some(s => !['2','8','Joker'].includes(s.value));
-        const jokerCount = selectedCards.filter(s => s.value === 'Joker').length;
+        const baseCount = selectedCards.filter(s => !['2','8','Joker'].includes(s.value)).length;
 
         let canAdd = false;
 
         if (selectedCards.length === 0) {
             canAdd = true;
 
+        } else if (hasJoker && hasEight) {
+            // 8+Joker(+2) — potrzebne dokładnie 2 karty bazowe
+            if (baseCount < 2 && !['2','8','Joker'].includes(card.value)) canAdd = true;
+
         } else if (hasJoker) {
-            const nonJInSel = selectedCards.filter(s => s.value !== 'Joker').length;
-            if (nonJInSel < 2 && card.value !== 'Joker') canAdd = true;
+            // Zwykły Joker — potrzebne 2 nie-Jokerowe karty
+            const nonJ = selectedCards.filter(s => s.value !== 'Joker').length;
+            if (nonJ < 2 && card.value !== 'Joker') canAdd = true;
 
-        } else if (card.value === 'Joker' && jokerCount === 0 && selectedCards.length <= 2) {
-            canAdd = true;
-
-        } else if (hasTwo && hasEight) {
-            // 8+2 combo — potrzebna 1 karta bazowa, łącznie 3
-            if (selectedCards.length < 3 && !['2','8','Joker'].includes(card.value)) canAdd = true;
-
-        } else if (hasTwo && !hasEight) {
-            // Sama 2 — potrzebna dokładnie 1 karta bazowa, łącznie 2
-            if (selectedCards.length === 1 && !['2','8','Joker'].includes(card.value)) canAdd = true;
-
-        } else if (hasEight && !hasTwo) {
-            // Sama 8 — opcjonalnie 1 karta (nie 8, nie Joker, nie 2)
-            if (selectedCards.length === 1 && !['8','Joker'].includes(card.value)) {
-                // Pozwól dodać 2 (to zacznie combo 8+2) lub kartę bazową
-                canAdd = true;
+        } else if (hasEight && hasTwo) {
+            // 8+2 — potrzebna 1 karta bazowa LUB Joker (startuje 8+2+Joker)
+            if (selectedCards.length === 2) {
+                if (!['2','8','Joker'].includes(card.value)) canAdd = true;
+                if (card.value === 'Joker') canAdd = true;
             }
 
+        } else if (hasEight && !hasTwo) {
+            // 8 solo — można dodać: kartę bazową, 2 (dla 8+2), lub Jokera (dla 8+Joker)
+            if (selectedCards.length === 1 && card.value !== '8') canAdd = true;
+
+        } else if (hasTwo && !hasEight) {
+            // 2 — potrzebna 1 karta bazowa
+            if (selectedCards.length === 1 && !['2','8','Joker'].includes(card.value)) canAdd = true;
+
         } else if (hasNormal && !hasEight && !hasTwo && !hasJoker) {
-            // Mamy normalną kartę — można dodać 8
+            // Normalna karta — można dodać 8
             if (selectedCards.length === 1 && card.value === '8') canAdd = true;
         }
 
@@ -508,6 +538,13 @@
     }
 
     function cancelCombo() { selectedCards = []; renderHand(); }
+
+    function drawCard() {
+        if (!isMyTurn || hasDrawnThisTurn) return;
+        hasDrawnThisTurn = true;
+        socket.emit('draw-card');
+        refreshButtons();
+    }
 
     function openTargetMenu(targets, callback) {
         const menu = document.getElementById('target-menu');
