@@ -24,6 +24,7 @@ let lastMoveWasBlef = false;
 let canCheckBlef = false;
 let sksResponses = 0;
 let wasBulaInRound = false;
+let roundEndTimer = null;
 let pendingBlefPickup = null;
 
 const DEBUG = true;
@@ -143,6 +144,7 @@ io.on('connection', (socket) => {
         currentPlayerIdx = 0;
         pendingBlefPickup = null;
         tableRevealed = false;
+        if (roundEndTimer) { clearTimeout(roundEndTimer); roundEndTimer = null; }
         players.forEach(p => { p.hand = []; p.hasPlayed = false; p.skippedRound = false; p.sksUsed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
         io.emit('reset-client-ui');
         updatePlayerList();
@@ -160,6 +162,7 @@ io.on('connection', (socket) => {
         wasBulaInRound = false;
         pendingBlefPickup = null;
         tableRevealed = false;
+        if (roundEndTimer) { clearTimeout(roundEndTimer); roundEndTimer = null; }
         players.forEach(p => {
             p.hand = gameDeck.splice(0, 5);
             p.hasPlayed = false; p.skippedRound = false; p.currentCombo = [];
@@ -233,6 +236,7 @@ io.on('connection', (socket) => {
 
         canCheckBlef = false;
         gameResolving = true;
+        if (roundEndTimer) { clearTimeout(roundEndTimer); roundEndTimer = null; }
 
         const attacker = players[lastPlayerIdx];
         const checker  = players[checkerIdx];
@@ -529,14 +533,18 @@ io.on('connection', (socket) => {
             return;
         }
         if (active.every(pl => pl.hasPlayed)) {
-            canCheckBlef = false;
             gameResolving = true;
-            io.emit('update-status', '🔍 Wszyscy zagrali! Odkrywanie kart...');
-            recalcAndShowTable();
-            setTimeout(() => {
-                io.emit('update-status', 'SKS — użyj swojej szansy!');
-                showSksToEligible();
-            }, 2000);
+            io.emit('update-status', '🔍 Wszyscy zagrali! Możesz sprawdzić blefa przez 5 sekund...');
+            roundEndTimer = setTimeout(() => {
+                roundEndTimer = null;
+                canCheckBlef = false;
+                io.emit('update-status', '🔍 Odkrywanie kart...');
+                recalcAndShowTable();
+                setTimeout(() => {
+                    io.emit('update-status', 'SKS — użyj swojej szansy!');
+                    showSksToEligible();
+                }, 2000);
+            }, 5000);
         } else {
             io.emit('update-status', `Tura: ${players[currentPlayerIdx].name}`);
         }
@@ -624,7 +632,7 @@ io.on('connection', (socket) => {
                     }
                 });
             });
-            setTimeout(() => resolveRound(), 3000);
+            setTimeout(() => resolveRound(), 8000);
         } else {
             const all   = tableCards.flatMap(m => m.cards);
             const valid = all.filter(c => c.value !== 'Joker');
