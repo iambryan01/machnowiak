@@ -115,12 +115,39 @@
         #debug-panel { position: fixed; bottom: 0; right: 0; width: 340px; max-height: 260px; background: rgba(0,0,0,0.92); border: 1px solid #333; border-radius: 8px 0 0 0; font-size: 0.72rem; font-family: monospace; color: #0f0; overflow-y: auto; padding: 8px; z-index: 9000; display: none; }
         #debug-panel.visible { display: block; }
         #debug-toggle { position: fixed; bottom: 0; right: 0; background: #222; color: #0f0; border: 1px solid #0f0; font-size: 0.7rem; padding: 3px 8px; cursor: pointer; z-index: 9001; border-radius: 4px 0 0 0; }
+
+        /* ── ZASADY ── */
+        #rules-btn { margin-top: auto; padding-top: 20px; background: none; border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.6); font-size: 0.8rem; padding: 9px 12px; width: 100%; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        #rules-btn:hover { background: rgba(255,255,255,0.08); color: white; border-color: rgba(255,255,255,0.35); filter: none; }
+        #rules-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 99998; justify-content: center; align-items: center; padding: 20px 20px 20px 220px; }
+        #rules-overlay.visible { display: flex; }
+        #rules-modal { background: #0d0c25; border: 2px solid var(--accent); border-radius: 18px; padding: 32px 36px; max-width: 680px; width: 100%; max-height: 88vh; overflow-y: auto; position: relative; font-size: 0.88rem; line-height: 1.65; scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
+        #rules-modal::-webkit-scrollbar { width: 6px; }
+        #rules-modal::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+        #rules-modal h2 { color: var(--gold); font-size: 1.3rem; margin: 0 0 18px; text-align: center; padding-bottom: 14px; border-bottom: 1px solid rgba(241,196,15,0.25); }
+        #rules-modal h3 { color: var(--accent); font-size: 0.95rem; margin: 22px 0 7px; letter-spacing: 0.03em; }
+        #rules-modal p { margin: 0 0 8px; color: rgba(255,255,255,0.88); }
+        #rules-modal ul { margin: 4px 0 8px; padding-left: 18px; }
+        #rules-modal li { margin-bottom: 5px; color: rgba(255,255,255,0.85); }
+        #rules-modal strong { color: var(--gold); }
+        #rules-modal em { color: #aaa; font-style: normal; font-size: 0.83rem; }
+        #rules-modal .close-rules { position: sticky; top: 0; float: right; background: none; border: none; color: rgba(255,255,255,0.4); font-size: 1.5rem; cursor: pointer; padding: 0; line-height: 1; margin-left: 12px; margin-bottom: -24px; }
+        #rules-modal .close-rules:hover { color: white; filter: none; }
+        #rules-modal table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.84rem; }
+        #rules-modal th { background: rgba(52,152,219,0.15); color: var(--accent); padding: 7px 10px; text-align: left; border-bottom: 1px solid rgba(52,152,219,0.25); font-size: 0.82rem; }
+        #rules-modal td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+        #rules-modal tr:last-child td { border-bottom: none; }
+        #rules-modal .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.75rem; font-weight: bold; margin-left: 4px; }
+        #rules-modal .badge-red { background: rgba(231,76,60,0.25); color: #e74c3c; border: 1px solid rgba(231,76,60,0.4); }
+        #rules-modal .badge-gold { background: rgba(241,196,15,0.2); color: var(--gold); border: 1px solid rgba(241,196,15,0.35); }
+        #rules-modal .section-divider { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 18px 0; }
     </style>
 </head>
 <body>
 <div id="sidebar">
     <h2 style="margin:0 0 12px;font-size:1rem;">👥 GRACZE</h2>
     <div id="player-list"></div>
+    <button id="rules-btn" onclick="toggleRules()" style="margin-top:auto;">📖 Zasady gry</button>
 </div>
 
 <div id="game-area">
@@ -169,6 +196,91 @@
     <p id="win-wait" style="display:none; color:rgba(255,255,255,0.5); font-size:0.95rem; margin:0;">Czekaj na hosta...</p>
 </div>
 
+<!-- Modal Zasady -->
+<div id="rules-overlay" onclick="if(event.target===this)toggleRules()">
+<div id="rules-modal">
+<button class="close-rules" onclick="toggleRules()">✕</button>
+<h2>⚔️ MACHNOWIAK 2.0 — Zasady gry</h2>
+
+<h3>🎯 Cel gry</h3>
+<p>Pozbądź się wszystkich kart z ręki jako pierwszy. Ostatni gracz z kartami przegrywa.</p>
+
+<hr class="section-divider">
+<h3>🃏 Przygotowanie</h3>
+<p>Każdy gracz otrzymuje na start <strong>5 kart</strong>. Gra toczy się na jednej talii liczącej <strong>53 karty</strong> (standardowa talia + 1 Joker). Gdy talia się wyczerpie, zostaje automatycznie przetasowana i uzupełniona.</p>
+
+<hr class="section-divider">
+<h3>🔄 Przebieg rundy</h3>
+<p>Gracze grają po kolei. W swojej turze każdy wykonuje jeden ruch:</p>
+<ul>
+    <li><strong>Zagrać combo</strong> — wyłożyć karty na stół zgodnie z zasadami,</li>
+    <li><strong>Pominąć turę</strong> — zrezygnować z gry i dobrać 3 karty z talii.</li>
+</ul>
+<p>Gdy wszyscy aktywni gracze wyłożą karty, następuje odkrycie i rozstrzygnięcie rundy.</p>
+
+<hr class="section-divider">
+<h3>📊 Wartości kart</h3>
+<p>Karty punktowe: <strong>3, 4, 5, 6, 7, 9, 10, J, Q, K, A</strong> — wartość odpowiada nominałowi (J=11, Q=12, K=13, A=14).</p>
+<p>Karty <strong>2</strong>, <strong>8</strong> i <strong>Joker</strong> są specjalne — same w sobie nie mają wartości, ale zmieniają zasady gry.</p>
+
+<hr class="section-divider">
+<h3>🧩 Dozwolone kombinacje</h3>
+<table>
+    <tr><th>Combo</th><th>Karty</th><th>Siła</th></tr>
+    <tr><td><strong>Solo</strong></td><td>1 karta punktowa (3–A)</td><td>wartość karty</td></tr>
+    <tr><td><strong>Dwójka</strong></td><td>2 + karta punktowa</td><td>wartość karty × 2</td></tr>
+    <tr><td><strong>Ósemka</strong></td><td>8 + karta punktowa <em>(wskaż cel)</em></td><td>wartość karty</td></tr>
+    <tr><td><strong>Ósemka + Dwójka</strong></td><td>8 + 2 + karta punktowa <em>(wskaż cel)</em></td><td>wartość karty × 2</td></tr>
+    <tr><td><strong>Joker</strong></td><td>Joker + 2 dowolne (min. 1 punktowa)</td><td>suma kart punktowych</td></tr>
+    <tr><td><strong>Ósemka + Joker</strong></td><td>8 + Joker + 2 karty punktowe <em>(wskaż cel)</em></td><td>suma 2 kart punktowych</td></tr>
+    <tr><td><strong>Ósemka + Dwójka + Joker</strong></td><td>8 + 2 + Joker + 2 karty punktowe <em>(wskaż cel)</em></td><td>suma 2 kart punktowych × 2</td></tr>
+</table>
+
+<hr class="section-divider">
+<h3>💀 Kara ósemki</h3>
+<p>Każda ósemka wymaga wskazania gracza, który traci punkty w tej rundzie:</p>
+<ul>
+    <li>Ósemka czerwona (♥ lub ♦) <span class="badge badge-red">−8 pkt</span></li>
+    <li>Ósemka czarna (♠ lub ♣) <span class="badge badge-red">−4 pkt</span></li>
+</ul>
+<p>Punkty celu mogą zejść poniżej zera.</p>
+
+<hr class="section-divider">
+<h3>🏆 Rozstrzygnięcie rundy</h3>
+<p>Po odkryciu kart porównywane są siły wszystkich graczy. Gracz z <strong>najniższą siłą</strong> przegrywa rundę i dobiera <strong>4 karty</strong> z talii. Wszystkie karty ze stołu wracają do talii — Joker jest wyjątkiem i zostaje usunięty z gry.</p>
+
+<hr class="section-divider">
+<h3>⚔️ Buła — dogrywka przy remisie</h3>
+<p>Jeśli dwóch lub więcej graczy uzyska tę samą najwyższą siłę, każdy z nich dobiera <strong>2 losowe karty</strong> dołączające do jego stosu bez bonusów (nie podwajają się). Rozstrzygnięcie powtarza się. Przegrany po bule dostaje <strong>4 karne karty</strong>.</p>
+
+<hr class="section-divider">
+<h3>🔥 SKS — Szczęśliwa Karta Serwera</h3>
+<p>Po odkryciu kart, ale przed finalnym rozstrzygnięciem, każdy gracz <strong>raz w całej grze</strong> może użyć SKS. Z talii losowana jest jedna dodatkowa karta:</p>
+<ul>
+    <li><strong>Joker</strong> — trafia do twojej ręki, nie na stół.</li>
+    <li><strong>Ósemka</strong> — musisz wskazać nowy cel.</li>
+    <li><strong>Karta punktowa</strong> — dołącza do stosu i zwiększa siłę (bez podwajania, nawet przy wcześniejszej dwójce).</li>
+</ul>
+
+<hr class="section-divider">
+<h3>🕵️ Blef</h3>
+<p>Zamiast zagrać w swojej turze, możesz sprawdzić blef poprzedniego gracza — oskarżając go, że ma w ręce kartę o wyższej wartości niż ta, którą zagrał. Po tym jak wszyscy zagrają, masz jeszcze <strong>5 sekund</strong> na sprawdzenie blefu.</p>
+<ul>
+    <li><strong>Blef złapany</strong> — kłamca dostaje nową rękę; ty wybierasz mu 2 najgorsze karty z puli 10 losowych.</li>
+    <li><strong>Fałszywe oskarżenie</strong> — ty dostajesz 4 karne karty; oskarżony sam wybiera sobie 2 najlepsze z puli 10 losowych.</li>
+    <li><strong>Specjalny przypadek</strong> — jeśli gracz zagrał ostatnie karty i nie blefował, wygrywa natychmiast. Oskarżający dostaje 4 karne karty.</li>
+</ul>
+
+<hr class="section-divider">
+<h3>⏭️ Pominięcie tury</h3>
+<p>Jeśli nie chcesz grać, możesz pominąć turę — dobierasz <strong>3 karty</strong> i nie bierzesz udziału w tej rundzie (nie wygrywasz, ale też nie możesz przegrać). Jeśli wszyscy pominą turę, runda jest anulowana i zaczyna się nowa.</p>
+
+<hr class="section-divider">
+<h3>🥇 Wygrana</h3>
+<p>Gracz, który jako pierwszy wyczerpie wszystkie karty z ręki, <strong>wygrywa grę</strong>. Nową grę może rozpocząć wyłącznie <span class="badge badge-gold">HOST</span>.</p>
+</div>
+</div>
+
 <button id="debug-toggle" onclick="toggleDebug()">DBG</button>
 <div id="debug-panel"><div id="debug-content">brak danych</div></div>
 
@@ -194,6 +306,10 @@
         myNick = prompt('Twój Nick:');
         if (myNick) socket.emit('join', myNick);
     };
+
+    function toggleRules() {
+        document.getElementById('rules-overlay').classList.toggle('visible');
+    }
 
     function toggleDebug() {
         debugVisible = !debugVisible;
