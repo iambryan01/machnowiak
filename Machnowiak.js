@@ -22,7 +22,6 @@ let currentPlayerIdx = 0;
 let lastMoveWasBlef = false;
 let canCheckBlef = false;
 let sksResponses = 0;
-let roundTimer = null;
 let wasBulaInRound = false;
 let pendingBlefPickup = null;
 
@@ -130,6 +129,7 @@ io.on('connection', (socket) => {
 
     socket.on('start-game', () => {
         if (players.length === 0) return;
+        if (players[0]?.id !== socket.id) return; // tylko host może startować
         resetGame();
     });
 
@@ -141,7 +141,6 @@ io.on('connection', (socket) => {
         wasBulaInRound = false;
         currentPlayerIdx = 0;
         pendingBlefPickup = null;
-        if (roundTimer) { clearInterval(roundTimer); roundTimer = null; }
         tableRevealed = false;
         players.forEach(p => { p.hand = []; p.hasPlayed = false; p.skippedRound = false; p.sksUsed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
         io.emit('reset-client-ui');
@@ -159,7 +158,6 @@ io.on('connection', (socket) => {
         canCheckBlef = false;
         wasBulaInRound = false;
         pendingBlefPickup = null;
-        if (roundTimer) { clearInterval(roundTimer); roundTimer = null; }
         tableRevealed = false;
         players.forEach(p => {
             p.hand = gameDeck.splice(0, 5);
@@ -233,7 +231,7 @@ io.on('connection', (socket) => {
         }
 
         canCheckBlef = false;
-        if (roundTimer) { clearInterval(roundTimer); roundTimer = null; }
+        gameResolving = true;
 
         const attacker = players[lastPlayerIdx];
         const checker  = players[checkerIdx];
@@ -271,6 +269,8 @@ io.on('connection', (socket) => {
                 io.emit('player-won', attacker.name);
                 // Reset stołu
                 setTimeout(() => {
+                    gameResolving = false;
+                    tableRevealed = false;
                     const allOnTable = tableCards.flatMap(m => m.cards);
                     gameDeck.push(...allOnTable.filter(c => c.value !== 'Joker'));
                     tableCards = [];
@@ -334,6 +334,7 @@ io.on('connection', (socket) => {
 
         setTimeout(() => {
             if (players.length === 0) return;
+            gameResolving = false;
             tableRevealed = false;
             const allOnTable = tableCards.flatMap(m => m.cards);
             gameDeck.push(...allOnTable.filter(c => c.value !== 'Joker'));
@@ -432,7 +433,7 @@ io.on('connection', (socket) => {
         sksResponses = 0;
         let anyEligible = false;
         players.forEach(p => {
-            if (!p.sksUsed) {
+            if (!p.sksUsed && !p.skippedRound) {
                 io.to(p.id).emit('show-sks-modal');
                 anyEligible = true;
             } else {
@@ -660,7 +661,7 @@ io.on('connection', (socket) => {
         gameResolving = false;
         tableRevealed = false;
         players.forEach(p => { p.skippedRound = false; });
-        currentPlayerIdx = 0;
+        currentPlayerIdx = Math.floor(Math.random() * players.length);
         io.emit('clear-table');
         io.emit('update-status', `NOWA RUNDA - Zaczyna: ${players[currentPlayerIdx].name}`);
         updatePlayerList();
@@ -691,8 +692,12 @@ io.on('connection', (socket) => {
         if (idx !== -1) {
             dbg(`DISCONNECT: ${players[idx].name}`);
             players.splice(idx, 1);
-            if (players.length === 0) { gameStarted = false; currentPlayerIdx = 0; if (roundTimer) { clearInterval(roundTimer); roundTimer = null; } }
-            else if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
+            if (players.length === 0) {
+                gameStarted = false; gameResolving = false; currentPlayerIdx = 0;
+            } else {
+                if (idx < currentPlayerIdx) currentPlayerIdx--;
+                if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
+            }
         }
         updatePlayerList();
         broadcastDebug();
