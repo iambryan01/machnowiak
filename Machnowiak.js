@@ -26,6 +26,7 @@ let sksResponses = 0;
 let wasBulaInRound = false;
 let roundEndTimer = null;
 let pendingBlefPickup = null;
+let sksInProgress = false;
 
 const DEBUG = true;
 function dbg(...args) { if (DEBUG) console.log('[DBG]', ...args); }
@@ -124,8 +125,12 @@ io.on('connection', (socket) => {
 
     socket.on('join', (name) => {
         if (gameStarted) return;
-        players.push({ id: socket.id, name, hand: [], hasPlayed: false, skippedRound: false, currentCombo: [], target: null, sksUsed: false, waitingForTarget: false });
-        dbg(`JOIN: ${name}`);
+        if (!name || !name.trim()) return;
+        let uniqueName = name.trim();
+        let counter = 2;
+        while (players.some(p => p.name === uniqueName)) uniqueName = `${name.trim()} (${counter++})`;
+        players.push({ id: socket.id, name: uniqueName, hand: [], hasPlayed: false, skippedRound: false, currentCombo: [], target: null, sksUsed: false, waitingForTarget: false });
+        dbg(`JOIN: ${uniqueName}`);
         updatePlayerList();
     });
 
@@ -144,6 +149,7 @@ io.on('connection', (socket) => {
         currentPlayerIdx = 0;
         pendingBlefPickup = null;
         tableRevealed = false;
+        sksInProgress = false;
         if (roundEndTimer) { clearTimeout(roundEndTimer); roundEndTimer = null; }
         players.forEach(p => { p.hand = []; p.hasPlayed = false; p.skippedRound = false; p.sksUsed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
         io.emit('reset-client-ui');
@@ -162,6 +168,7 @@ io.on('connection', (socket) => {
         wasBulaInRound = false;
         pendingBlefPickup = null;
         tableRevealed = false;
+        sksInProgress = false;
         if (roundEndTimer) { clearTimeout(roundEndTimer); roundEndTimer = null; }
         players.forEach(p => {
             p.hand = gameDeck.splice(0, 5);
@@ -212,6 +219,7 @@ io.on('connection', (socket) => {
         lastMoveWasBlef = comboMaxVal < maxHandVal;
         lastPlayerIdx = pIdx;
         canCheckBlef = true;
+        io.emit('blef-status', true);
 
         dbg(`${p.name} zagrywa. ręka po: ${p.hand.length} kart. blef=${lastMoveWasBlef}`);
         io.to(p.id).emit('init-hand', p.hand);
@@ -235,6 +243,7 @@ io.on('connection', (socket) => {
         }
 
         canCheckBlef = false;
+        io.emit('blef-status', false);
         gameResolving = true;
         if (roundEndTimer) { clearTimeout(roundEndTimer); roundEndTimer = null; }
 
@@ -376,6 +385,7 @@ io.on('connection', (socket) => {
         lastMoveWasBlef = false;
         lastPlayerIdx = pIdx;
         canCheckBlef = false;
+        io.emit('blef-status', false);
         currentPlayerIdx = (currentPlayerIdx + 1) % players.length;
 
         io.emit('update-status', `${p.name} pominął turę i dobrał 3 karty.`);
@@ -436,6 +446,7 @@ io.on('connection', (socket) => {
 
     function showSksToEligible() {
         sksResponses = 0;
+        sksInProgress = true;
         let anyEligible = false;
         players.forEach(p => {
             if (!p.sksUsed && !p.skippedRound) {
@@ -465,6 +476,7 @@ io.on('connection', (socket) => {
     function checkAllSks() {
         if (sksResponses >= players.length) {
             sksResponses = 0;
+            sksInProgress = false;
             recalcAndShowTable();
             setTimeout(() => resolveRound(), 3000);
         }
@@ -538,6 +550,7 @@ io.on('connection', (socket) => {
             roundEndTimer = setTimeout(() => {
                 roundEndTimer = null;
                 canCheckBlef = false;
+                io.emit('blef-status', false);
                 io.emit('update-status', '🔍 Odkrywanie kart...');
                 recalcAndShowTable();
                 setTimeout(() => {
@@ -621,12 +634,12 @@ io.on('connection', (socket) => {
             const names = top.map(t => t.playerName).join(' i ');
             io.emit('update-status', `⚔️ BUŁA między: ${names}! Dogrywka...`);
             top.forEach(t => {
+                const tp = players.find(p => p.name === t.playerName);
                 replenish(2);
                 const ex = gameDeck.splice(0, 2);
                 ex.forEach(c => {
                     if (c.value === 'Joker') {
-                        players[t.playerIdx].hand.push(c);
-                        io.to(players[t.playerIdx].id).emit('init-hand', players[t.playerIdx].hand);
+                        if (tp) { tp.hand.push(c); io.to(tp.id).emit('init-hand', tp.hand); }
                     } else {
                         t.m.cards.push(c);
                     }
@@ -639,16 +652,18 @@ io.on('connection', (socket) => {
 
             // Karty ze stołu wracają do talii, przegrany losuje 4 nowe
             gameDeck.push(...valid);
-            replenish(4);
-            players[loser.playerIdx].hand.push(...gameDeck.splice(0, 4));
+            const loserPlayer = players.find(p => p.name === loser.playerName);
+            if (loserPlayer) {
+                replenish(4);
+                loserPlayer.hand.push(...gameDeck.splice(0, 4));
+                io.to(loserPlayer.id).emit('init-hand', loserPlayer.hand);
+            }
 
             if (wasBulaInRound) {
                 io.emit('update-status', `💀 Po dogrywce przegrywa ${loser.playerName} (${loser.power} pkt) i bierze 4 karne z talii!`);
             } else {
                 io.emit('update-status', `🃏 Rundę przegrywa ${loser.playerName} (${loser.power} pkt) i bierze 4 karty z talii!`);
             }
-
-            io.to(players[loser.playerIdx].id).emit('init-hand', players[loser.playerIdx].hand);
             wasBulaInRound = false;
             players.forEach(p => { p.hasPlayed = false; p.skippedRound = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
             tableCards = [];
@@ -698,16 +713,73 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         const idx = players.findIndex(p => p.id === socket.id);
-        if (idx !== -1) {
-            dbg(`DISCONNECT: ${players[idx].name}`);
-            players.splice(idx, 1);
-            if (players.length === 0) {
-                gameStarted = false; gameResolving = false; currentPlayerIdx = 0;
-            } else {
-                if (idx < currentPlayerIdx) currentPlayerIdx--;
-                if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
+        if (idx === -1) { updatePlayerList(); broadcastDebug(); return; }
+
+        dbg(`DISCONNECT: ${players[idx].name}`);
+        const disconnectedName = players[idx].name;
+
+        // ── Blef pick — gracz odłączył się w trakcie wyboru kart ─────────────
+        if (pendingBlefPickup) {
+            const { attackerIdx, checkerIdx } = pendingBlefPickup;
+            if (idx === attackerIdx || idx === checkerIdx) {
+                pendingBlefPickup = null;
+                players.splice(idx, 1);
+                if (players.length === 0) {
+                    gameStarted = false; gameResolving = false; currentPlayerIdx = 0;
+                } else {
+                    if (idx < currentPlayerIdx) currentPlayerIdx--;
+                    if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
+                    gameResolving = false; tableRevealed = false;
+                    tableCards = [];
+                    players.forEach(p => { p.hasPlayed = false; p.skippedRound = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
+                    io.emit('clear-table');
+                    io.emit('update-status', 'Gracz opuścił grę — reset rundy.');
+                    setTimeout(() => startNextRound(), 1500);
+                }
+                updatePlayerList(); broadcastDebug(); return;
             }
         }
+
+        players.splice(idx, 1);
+
+        if (players.length === 0) {
+            gameStarted = false; gameResolving = false; currentPlayerIdx = 0;
+            if (roundEndTimer) { clearTimeout(roundEndTimer); roundEndTimer = null; }
+            sksInProgress = false; pendingBlefPickup = null; tableCards = [];
+            updatePlayerList(); broadcastDebug(); return;
+        }
+
+        if (idx < currentPlayerIdx) currentPlayerIdx--;
+        if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
+
+        // Usuń wpis ze stołu i napraw indeksy
+        tableCards = tableCards.filter(m => m.playerName !== disconnectedName);
+        tableCards.forEach(m => { if (m.playerIdx > idx) m.playerIdx--; });
+
+        // ── Faza roundEndTimer ────────────────────────────────────────────────
+        if (roundEndTimer) {
+            clearTimeout(roundEndTimer); roundEndTimer = null;
+            canCheckBlef = false;
+            io.emit('blef-status', false);
+            const active = players.filter(pl => !pl.skippedRound);
+            if (active.length === 0) {
+                setTimeout(() => startNextRound(), 1500);
+            } else if (active.every(pl => pl.hasPlayed)) {
+                io.emit('update-status', '🔍 Odkrywanie kart...');
+                recalcAndShowTable();
+                setTimeout(() => { io.emit('update-status', 'SKS — użyj swojej szansy!'); showSksToEligible(); }, 2000);
+            } else {
+                gameResolving = false;
+                io.emit('update-status', `Tura: ${players[currentPlayerIdx]?.name}`);
+            }
+        // ── Faza SKS ─────────────────────────────────────────────────────────
+        } else if (sksInProgress) {
+            checkAllSks();
+        // ── Normalna tura ─────────────────────────────────────────────────────
+        } else if (!gameResolving && gameStarted) {
+            checkRoundComplete();
+        }
+
         updatePlayerList();
         broadcastDebug();
     });

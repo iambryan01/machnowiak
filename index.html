@@ -167,7 +167,7 @@
         <div id="reka-container">
             <div class="main-actions">
                 <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')" style="display:none;">START GRY</button>
-                <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
+                <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')" style="display:none;">SPRAWDZAM BLEF!</button>
                 <button id="draw-btn" class="btn-draw" onclick="drawCard()" style="display:none;">Pomiń kolejkę i dobierz 3 karty</button>
                 <button id="play-btn" class="btn-play" onclick="submitCombo()" style="display:none;">ZAGRAJ ▶</button>
                 <button id="cancel-btn" class="btn-cancel" onclick="cancelCombo()" style="display:none;">✕ ANULUJ</button>
@@ -301,6 +301,7 @@
     let clientGameStarted = false;
     let hasDrawnThisTurn = false;
     let debugVisible = false;
+    let canBlefClient = false;
 
     window.onload = () => {
         myNick = prompt('Twój Nick:');
@@ -315,6 +316,12 @@
         debugVisible = !debugVisible;
         document.getElementById('debug-panel').classList.toggle('visible', debugVisible);
     }
+
+    function updateBlefBtn() {
+        document.getElementById('blef-btn').style.display = (isMyTurn && canBlefClient) ? 'inline-block' : 'none';
+    }
+
+    socket.on('blef-status', v => { canBlefClient = v; updateBlefBtn(); });
 
     function startNewGame() {
         if (!amIHost) return;
@@ -364,6 +371,7 @@
             amIHost = me ? me.isHost : false;
             document.getElementById('reset-btn').style.display = amIHost ? 'block' : 'none';
             document.getElementById('start-btn').style.display = (amIHost && !clientGameStarted) ? 'inline-block' : 'none';
+            updateBlefBtn();
             if (isMyTurn && !wasMyTurn) { hasDrawnThisTurn = false; renderHand(); }
         }
     });
@@ -378,7 +386,7 @@
         isMyTurn = false;
     });
     socket.on('update-timer', time => { document.getElementById('timer-box').innerText = time > 0 ? `⏱ KONIEC RUNDY ZA: ${time}s` : ''; });
-    socket.on('error-msg', msg => { isMyTurn = false; cancelCombo(); alert(msg); });
+    socket.on('error-msg', msg => { cancelCombo(); alert(msg); });
 
     socket.on('update-table-hidden', data => {
         const stol = document.getElementById('stół');
