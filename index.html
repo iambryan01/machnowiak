@@ -139,9 +139,9 @@
         </div>
         <div id="reka-container">
             <div class="main-actions">
-                <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')">START GRY</button>
+                <button id="start-btn" class="btn-start" onclick="socket.emit('start-game')" style="display:none;">START GRY</button>
                 <button id="blef-btn" class="btn-blef" onclick="socket.emit('check-blef')">SPRAWDZAM BLEF!</button>
-                <button id="draw-btn" class="btn-draw" onclick="drawCard()" style="display:none;">DOBIERZ 🃏</button>
+                <button id="draw-btn" class="btn-draw" onclick="drawCard()" style="display:none;">Pomiń kolejkę i dobierz 3 karty</button>
                 <button id="play-btn" class="btn-play" onclick="submitCombo()" style="display:none;">ZAGRAJ ▶</button>
                 <button id="cancel-btn" class="btn-cancel" onclick="cancelCombo()" style="display:none;">✕ ANULUJ</button>
             </div>
@@ -181,6 +181,7 @@
     let selectedCards = [];
     let isMyTurn = false;
     let amIHost = false;
+    let clientGameStarted = false;
     let hasDrawnThisTurn = false;
     let debugVisible = false;
 
@@ -241,6 +242,7 @@
             isMyTurn = me ? me.isCurrent : false;
             amIHost = me ? me.isHost : false;
             document.getElementById('reset-btn').style.display = amIHost ? 'block' : 'none';
+            document.getElementById('start-btn').style.display = (amIHost && !clientGameStarted) ? 'inline-block' : 'none';
             if (isMyTurn && !wasMyTurn) { hasDrawnThisTurn = false; renderHand(); }
         }
     });
@@ -248,7 +250,12 @@
     socket.on('update-status', msg => { document.getElementById('status').innerText = msg; });
     socket.on('init-hand', hand => { myHand = hand; selectedCards = []; renderHand(); });
     socket.on('clear-table', () => { document.getElementById('stół').innerHTML = ''; });
-    socket.on('game-begun', () => { document.getElementById('start-btn').style.display = 'none'; isMyTurn = false; });
+    socket.on('game-begun', () => {
+        clientGameStarted = true;
+        document.getElementById('start-btn').style.display = 'none';
+        document.getElementById('win-screen').classList.remove('visible');
+        isMyTurn = false;
+    });
     socket.on('update-timer', time => { document.getElementById('timer-box').innerText = time > 0 ? `⏱ KONIEC RUNDY ZA: ${time}s` : ''; });
     socket.on('error-msg', msg => { isMyTurn = false; cancelCombo(); alert(msg); });
 
@@ -324,13 +331,13 @@
     socket.on('show-target-menu', targets => { openTargetMenu(targets, t => socket.emit('target-selected', t)); });
 
     socket.on('reset-client-ui', () => {
-        myHand = []; selectedCards = []; isMyTurn = false;
+        myHand = []; selectedCards = []; isMyTurn = false; clientGameStarted = false;
         document.getElementById('reka').innerHTML = '';
         document.getElementById('stół').innerHTML = '';
         document.getElementById('status').innerText = '';
         document.getElementById('timer-box').innerText = '';
         document.getElementById('sks-panel').style.display = 'none';
-        document.getElementById('start-btn').style.display = 'inline-block';
+        document.getElementById('start-btn').style.display = amIHost ? 'inline-block' : 'none';
         document.getElementById('play-btn').style.display = 'none';
         document.getElementById('cancel-btn').style.display = 'none';
         document.getElementById('draw-btn').style.display = 'none';
