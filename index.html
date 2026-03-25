@@ -175,6 +175,11 @@
 <script>
     document.addEventListener('contextmenu', e => e.preventDefault());
 
+    function playSound(name) {
+        const a = new Audio(`/sounds/${name}.mp3`);
+        a.play().catch(() => {});
+    }
+
     const socket = io();
     let myNick = null;
     let myHand = [];
@@ -474,7 +479,7 @@
         if (!isMyTurn) return;
 
         const selIdx = selectedCards.findIndex(s => s._idx === idx);
-        if (selIdx !== -1) { selectedCards.splice(selIdx, 1); renderHand(); return; }
+        if (selIdx !== -1) { selectedCards.splice(selIdx, 1); playSound('card_deselect'); renderHand(); return; }
 
         const hasJoker  = selectedCards.some(s => s.value === 'Joker');
         const hasTwo    = selectedCards.some(s => s.value === '2');
@@ -516,7 +521,7 @@
             if (selectedCards.length === 1 && card.value === '8') canAdd = true;
         }
 
-        if (canAdd) selectedCards.push({ ...card, _idx: idx });
+        if (canAdd) { selectedCards.push({ ...card, _idx: idx }); playSound('card_select'); }
         renderHand();
     }
 

@@ -5,6 +5,7 @@ const io = require('socket.io')(http);
 const path = require('path');
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.use('/sounds', express.static(path.join(__dirname, 'sounds')));
 
 const cardValues = {
     '2': 0, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
