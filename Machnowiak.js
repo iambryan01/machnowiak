@@ -274,7 +274,7 @@ io.on('connection', (socket) => {
                     const allOnTable = tableCards.flatMap(m => m.cards);
                     gameDeck.push(...allOnTable.filter(c => c.value !== 'Joker'));
                     tableCards = [];
-                    players.forEach(p => { p.hasPlayed = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
+                    players.forEach(p => { p.hasPlayed = false; p.skippedRound = false; p.currentCombo = []; p.target = null; p.waitingForTarget = false; });
                     currentPlayerIdx = checkerIdx;
                     if (currentPlayerIdx >= players.length) currentPlayerIdx = 0;
                     io.emit('clear-table');
