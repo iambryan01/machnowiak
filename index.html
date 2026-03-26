@@ -413,7 +413,11 @@
     socket.on('update-status', msg => { document.getElementById('status').innerText = msg; });
     socket.on('init-hand', hand => { myHand = hand; selectedCards = []; renderHand(); });
     socket.on('clear-table', () => { document.getElementById('stół').innerHTML = ''; });
-    socket.on('round-preparing', () => { playSound('new_round'); });
+    socket.on('round-preparing', () => {
+        const prep = new Audio('/sounds/new_round.mp3');
+        prep.play().catch(() => {});
+        prep.onended = () => playSound('round_start');
+    });
     socket.on('game-begun', () => {
         clientGameStarted = true;
         document.getElementById('start-btn').style.display = 'none';
