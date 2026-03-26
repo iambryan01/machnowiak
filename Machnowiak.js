@@ -691,6 +691,7 @@ io.on('connection', (socket) => {
         players.forEach(p => { p.skippedRound = false; });
         currentPlayerIdx = Math.floor(Math.random() * players.length);
         io.emit('clear-table');
+        io.emit('round-preparing');
         io.emit('update-status', `NOWA RUNDA - Zaczyna: ${players[currentPlayerIdx].name}`);
         updatePlayerList();
         players.forEach(p => io.to(p.id).emit('init-hand', p.hand));
