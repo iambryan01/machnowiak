@@ -440,6 +440,7 @@
     });
 
     socket.on('show-sks-modal', () => { isMyTurn = false; cancelCombo(); document.getElementById('sks-panel').style.display = 'block'; });
+    socket.on('sks-card-placed', () => playSound('play_card_on_table'));
 
     socket.on('show-pick-menu', data => {
         const menu = document.getElementById('pick-menu');

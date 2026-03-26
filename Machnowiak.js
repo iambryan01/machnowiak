@@ -433,10 +433,12 @@ io.on('connection', (socket) => {
                     if (!tableMove.sksEights) tableMove.sksEights = [];
                     tableMove.sksEights.push({ cardIdx: tableMove.cards.length - 1, target: null });
                 }
+                io.to(p.id).emit('sks-card-placed');
                 refreshTableFor(pIdx);
                 io.to(p.id).emit('show-target-menu', players.filter(pl => pl.id !== p.id).map(pl => pl.name));
             } else {
                 if (tableMove) tableMove.cards.push(sksCard);
+                io.to(p.id).emit('sks-card-placed');
                 refreshTableFor(pIdx);
                 advanceSks();
             }
