@@ -247,6 +247,7 @@ io.on('connection', (socket) => {
         canCheckBlef = false;
         io.emit('blef-status', false);
         gameResolving = true;
+        io.emit('set-resolving');
         if (roundEndTimer) { clearTimeout(roundEndTimer); roundEndTimer = null; }
 
         const attacker = players[lastPlayerIdx];
@@ -544,12 +545,14 @@ io.on('connection', (socket) => {
         const active = players.filter(pl => !pl.skippedRound);
         if (active.length === 0) {
             gameResolving = true;
+            io.emit('set-resolving');
             io.emit('update-status', 'Wszyscy pominęli turę — nowa runda.');
             setTimeout(() => startNextRound(), 1500);
             return;
         }
         if (active.every(pl => pl.hasPlayed)) {
             gameResolving = true;
+            io.emit('set-resolving');
             io.emit('update-status', '🔍 Wszyscy zagrali! Możesz sprawdzić blefa przez 5 sekund...');
             roundEndTimer = setTimeout(() => {
                 roundEndTimer = null;

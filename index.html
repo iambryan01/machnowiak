@@ -339,6 +339,7 @@
     let amIHost = false;
     let clientGameStarted = false;
     let hasDrawnThisTurn = false;
+    let gameResolvingClient = false;
     let debugVisible = false;
     let canBlefClient = false;
 
@@ -417,7 +418,8 @@
 
     socket.on('update-status', msg => { document.getElementById('status').innerText = msg; });
     socket.on('init-hand', hand => { myHand = hand; selectedCards = []; renderHand(); });
-    socket.on('clear-table', () => { document.getElementById('stół').innerHTML = ''; });
+    socket.on('clear-table', () => { document.getElementById('stół').innerHTML = ''; gameResolvingClient = false; });
+    socket.on('set-resolving', () => { gameResolvingClient = true; refreshButtons(); });
     socket.on('round-preparing', () => {
         const prep = preloaded['new_round'];
         prep.currentTime = 0;
@@ -543,7 +545,7 @@
 
         document.getElementById('play-btn').style.display   = 'none';
         document.getElementById('cancel-btn').style.display = has ? 'inline-block' : 'none';
-        document.getElementById('draw-btn').style.display   = (isMyTurn && !hasDrawnThisTurn && !has) ? 'inline-block' : 'none';
+        document.getElementById('draw-btn').style.display   = (isMyTurn && !hasDrawnThisTurn && !has && !gameResolvingClient) ? 'inline-block' : 'none';
 
         if (!isMyTurn) { info.innerText = ''; return; }
         if (!has) { info.innerText = '👆 Kliknij kartę aby ją wybrać'; return; }
