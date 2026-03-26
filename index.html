@@ -303,10 +303,15 @@
 <script>
     document.addEventListener('contextmenu', e => e.preventDefault());
 
+    const preloaded = {};
     function playSound(name) {
-        const a = new Audio(`/sounds/${name}.mp3`);
+        let a = preloaded[name];
+        if (a) { a.currentTime = 0; }
+        else { a = new Audio(`/sounds/${name}.mp3`); preloaded[name] = a; }
         a.play().catch(() => {});
     }
+    // Preload dźwięków rundy żeby grały bez opóźnienia
+    ['new_round', 'round_start'].forEach(n => { preloaded[n] = new Audio(`/sounds/${n}.mp3`); });
 
     const bgMusic = document.getElementById('main-theme');
     bgMusic.volume = 0.5;
@@ -414,7 +419,8 @@
     socket.on('init-hand', hand => { myHand = hand; selectedCards = []; renderHand(); });
     socket.on('clear-table', () => { document.getElementById('stół').innerHTML = ''; });
     socket.on('round-preparing', () => {
-        const prep = new Audio('/sounds/new_round.mp3');
+        const prep = preloaded['new_round'];
+        prep.currentTime = 0;
         prep.play().catch(() => {});
         prep.onended = () => playSound('round_start');
     });
