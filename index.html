@@ -63,7 +63,7 @@
         .karta .suit  { position: absolute; top: 22px; left: 7px; font-size: 0.9rem; }
         .karta .val-br { position: absolute; bottom: 4px; right: 6px; font-weight: 900; font-size: 1rem; transform: rotate(180deg); }
         .karta.red { color: var(--danger); }
-        .karta.zakryta { background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%); color: transparent; border: 1px solid rgba(255,255,255,0.3); }
+        .karta.zakryta { background: url('/img/card_back.png') center/cover no-repeat; color: transparent; border: 1px solid rgba(255,255,255,0.3); }
 
         #bottom-panel { display: flex; align-items: flex-end; gap: 16px; width: 95%; padding: 8px 0; margin-top: auto; position: relative; flex-shrink: 0; }
         #sks-panel { position: fixed; bottom: 220px; left: calc(100px + 50vw); transform: translateX(-50%); background: rgba(10,8,30,0.96); border: 2px solid var(--gold); padding: 14px 24px; border-radius: 14px; text-align: center; white-space: nowrap; z-index: 100; display: none; }
@@ -708,10 +708,20 @@
 
     function sendSks(decision) { socket.emit('sks-decision', decision); document.getElementById('sks-panel').style.display = 'none'; }
 
+    const cardImages = {
+        '2♥': '/img/2kier.png',
+    };
+
     function makeCard(k) {
         const div = document.createElement('div');
         div.className = `karta${(k.suit === '♥' || k.suit === '♦') ? ' red' : ''}`;
-        if (k.value === 'Joker') {
+        const imgKey = k.value + k.suit;
+        if (cardImages[imgKey]) {
+            const img = document.createElement('img');
+            img.src = cardImages[imgKey];
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+            div.appendChild(img);
+        } else if (k.value === 'Joker') {
             div.innerHTML = `<span class="val">🃏</span><span class="suit" style="top:22px;">Joker</span>`;
         } else {
             div.innerHTML = `<span class="val">${k.value}</span><span class="suit">${k.suit}</span><span class="val-br">${k.value}</span>`;
