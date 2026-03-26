@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
 
     <title>MACHNOWIAK 2.0</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root { --bg: #0f0c29; --accent: #3498db; --gold: #f1c40f; --danger: #e74c3c; }
@@ -654,6 +655,7 @@
     function submitCombo() {
         if (!isMyTurn || selectedCards.length === 0) return;
 
+        playSound('play_card_on_table');
         const err = clientValidateCombo(selectedCards);
         if (err) { alert(err); return; }
 

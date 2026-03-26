@@ -6,6 +6,7 @@ const path = require('path');
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.use('/sounds', express.static(path.join(__dirname, 'sounds')));
+app.get('/favicon.png', (req, res) => res.sendFile(path.join(__dirname, 'favicon.png')));
 
 const cardValues = {
     '2': 0, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
