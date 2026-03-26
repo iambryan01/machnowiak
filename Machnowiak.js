@@ -74,6 +74,14 @@ function validateCombo(cards) {
 
     if (jokerCount > 1) return 'Nie można zagrać dwóch Jokerów naraz.';
 
+    // ── Combo: 2 + Joker + 2 karty bazowe ────────────────────────────────────
+    if (hasJoker && hasTwo && !hasEight) {
+        const base = cards.filter(c => !['2','Joker'].includes(c.value));
+        if (base.length !== 2) return 'Combo 2+Joker wymaga dokładnie 2 kart punktowych.';
+        if (cards.length !== 4) return 'Combo 2+Joker wymaga dokładnie 4 kart (2, Joker, 2 bazowe).';
+        return null;
+    }
+
     // ── Nowe combo: 8 (+ opcjonalnie 2) + Joker + 2 karty bazowe ─────────────
     if (hasJoker && hasEight) {
         const base = cards.filter(c => !['2','8','Joker'].includes(c.value));
@@ -267,7 +275,10 @@ io.on('connection', (socket) => {
         io.emit('reveal-blef-anim', { player: attacker.name, cards: attacker.currentCombo });
 
         replenish(20);
-        const pool = gameDeck.splice(0, 10);
+        const rawPool = gameDeck.splice(0, 10);
+        const poolSeen = new Set();
+        const pool = rawPool.filter(c => { const k = c.value+c.suit; return poolSeen.has(k) ? false : (poolSeen.add(k), true); });
+        const pickCount = Math.min(2, pool.length);
 
         if (lastMoveWasBlef) {
             // ── BLEF ZŁAPANY ─────────────────────────────────────────────────
@@ -278,8 +289,8 @@ io.on('connection', (socket) => {
             io.to(attacker.id).emit('init-hand', attacker.hand);
             pendingBlefPickup = { attackerIdx: lastPlayerIdx, checkerIdx, wasBlef: true };
             io.to(checker.id).emit('show-pick-menu', {
-                pool, count: 2, targetIdx: lastPlayerIdx,
-                title: `🎯 Złapałeś ${attacker.name}! Wybierz mu 2 NAJGORSZE karty:`
+                pool, count: pickCount, targetIdx: lastPlayerIdx,
+                title: `🎯 Złapałeś ${attacker.name}! Wybierz mu ${pickCount} NAJGORSZE karty:`
             });
 
         } else {
@@ -323,8 +334,8 @@ io.on('connection', (socket) => {
             io.to(attacker.id).emit('init-hand', attacker.hand);
             pendingBlefPickup = { attackerIdx: lastPlayerIdx, checkerIdx, wasBlef: false };
             io.to(attacker.id).emit('show-pick-menu', {
-                pool, count: 2, targetIdx: lastPlayerIdx,
-                title: `🤩 Nie kłamałeś! Wybierz sobie 2 NAJLEPSZE karty:`
+                pool, count: pickCount, targetIdx: lastPlayerIdx,
+                title: `🤩 Nie kłamałeś! Wybierz sobie ${pickCount} NAJLEPSZE karty:`
             });
         }
         broadcastDebug();
@@ -470,7 +481,12 @@ io.on('connection', (socket) => {
                 sksResponses++;
             }
         });
-        if (!anyEligible || sksResponses >= players.length) checkAllSks();
+        if (!anyEligible) {
+            sksInProgress = false;
+            setTimeout(() => resolveRound(), 800);
+        } else if (sksResponses >= players.length) {
+            checkAllSks();
+        }
     }
 
     function refreshTableFor() {
@@ -530,7 +546,8 @@ io.on('connection', (socket) => {
         tableCards.push({
             playerIdx: players.indexOf(p), playerName: p.name,
             cards: [...p.currentCombo], target: p.target, sksEights: [],
-            originalCount: p.originalComboCount || p.currentCombo.length
+            originalCount: p.originalComboCount || p.currentCombo.length,
+            bulaCount: 0
         });
 
         currentPlayerIdx = (currentPlayerIdx + 1) % players.length;
@@ -581,26 +598,37 @@ io.on('connection', (socket) => {
 
     // ── PUNKTY ────────────────────────────────────────────────────────────────
 
-    function calculatePower(cards, originalCount) {
+    function calculatePower(cards, originalCount, bulaCount) {
         const oc = (originalCount !== undefined) ? originalCount : cards.length;
+        const bc = bulaCount || 0;
+
         const origCards = cards.slice(0, oc);
-        const extraCards = cards.slice(oc);
+        const bulaCards = cards.slice(oc, oc + bc);
+        const sksCards  = cards.slice(oc + bc);
 
         const origBase = origCards.filter(c => !['8','2','Joker'].includes(c.value));
-        let pwr = origBase.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
-        if (origCards.some(c => c.value === '2')) pwr *= 2;
+        let origPwr = origBase.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
+        if (origCards.some(c => c.value === '2')) origPwr *= 2;
 
-        // Karty dobrane w bule/SKS NIE podwajają się
-        const extraBase = extraCards.filter(c => !['8','2','Joker'].includes(c.value));
-        pwr += extraBase.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
+        const bulaBase = bulaCards.filter(c => !['8','2','Joker'].includes(c.value));
+        let bulaPwr = bulaBase.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
 
-        return pwr;
+        const sksHasTwo = sksCards.some(c => c.value === '2');
+        const sksBase = sksCards.filter(c => !['8','2','Joker'].includes(c.value));
+        let sksPwr = sksBase.reduce((s, c) => s + (cardValues[c.value] || 0), 0);
+
+        if (sksHasTwo) {
+            if (bc > 0) bulaPwr *= 2;  // 2 z SKS po bule → podwaja bułę
+            else        origPwr *= 2;  // 2 z SKS bez buły → podwaja oryginał
+        }
+
+        return origPwr + bulaPwr + sksPwr;
     }
 
     function calcResults() {
         let res = tableCards.map(m => ({
             playerIdx: m.playerIdx, playerName: m.playerName,
-            power: calculatePower(m.cards, m.originalCount), m: m
+            power: calculatePower(m.cards, m.originalCount, m.bulaCount || 0), m: m
         }));
         tableCards.forEach(move => {
             move.cards.forEach((card, cardIdx) => {
@@ -658,6 +686,7 @@ io.on('connection', (socket) => {
                         if (tp) { tp.hand.push(c); io.to(tp.id).emit('init-hand', tp.hand); }
                     } else {
                         t.m.cards.push(c);
+                        t.m.bulaCount = (t.m.bulaCount || 0) + 1;
                     }
                 });
             });

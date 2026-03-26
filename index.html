@@ -248,6 +248,7 @@
     <tr><td><strong>Ósemka</strong></td><td>8 + karta punktowa <em>(wskaż cel)</em></td><td>wartość karty</td></tr>
     <tr><td><strong>Ósemka + Dwójka</strong></td><td>8 + 2 + karta punktowa <em>(wskaż cel)</em></td><td>wartość karty × 2</td></tr>
     <tr><td><strong>Joker</strong></td><td>Joker + 2 dowolne (min. 1 punktowa)</td><td>suma kart punktowych</td></tr>
+    <tr><td><strong>Dwójka + Joker</strong></td><td>2 + Joker + 2 karty punktowe</td><td>suma 2 kart punktowych × 2</td></tr>
     <tr><td><strong>Ósemka + Joker</strong></td><td>8 + Joker + 2 karty punktowe <em>(wskaż cel)</em></td><td>suma 2 kart punktowych</td></tr>
     <tr><td><strong>Ósemka + Dwójka + Joker</strong></td><td>8 + 2 + Joker + 2 karty punktowe <em>(wskaż cel)</em></td><td>suma 2 kart punktowych × 2</td></tr>
 </table>
@@ -275,7 +276,8 @@
 <ul>
     <li><strong>Joker</strong> — trafia do twojej ręki, nie na stół.</li>
     <li><strong>Ósemka</strong> — musisz wskazać nowy cel.</li>
-    <li><strong>Karta punktowa</strong> — dołącza do stosu i zwiększa siłę (bez podwajania, nawet przy wcześniejszej dwójce).</li>
+    <li><strong>Karta punktowa</strong> — dołącza do stosu i zwiększa siłę.</li>
+    <li><strong>Dwójka</strong> — podwaja twoją siłę na stole: jeśli nie było buły, podwaja oryginalny combo; jeśli była buła, podwaja tylko karty z dogrywki.</li>
 </ul>
 
 <hr class="section-divider">
@@ -602,6 +604,13 @@
                 if (cards.length !== expected) return `Combo ${hasTwo ? '8+2+Joker' : '8+Joker'} wymaga ${expected} kart.`;
             }
             return null; // jeszcze wybiera
+        }
+
+        if (hasJoker && hasTwo && !hasEight) {
+            const base = cards.filter(c => !['2','Joker'].includes(c.value));
+            if (base.length > 2) return 'Combo 2+Joker: max 2 karty bazowe.';
+            if (base.length === 2 && cards.length !== 4) return 'Combo 2+Joker wymaga dokładnie 4 kart.';
+            return null;
         }
 
         if (hasJoker) {
