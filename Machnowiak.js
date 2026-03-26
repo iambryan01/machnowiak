@@ -43,7 +43,16 @@ function createDeck() {
 }
 
 function replenish(needed) {
-    while (gameDeck.length < needed) gameDeck.push(...createDeck());
+    while (gameDeck.length < needed) {
+        const inPlay = new Set(
+            players.flatMap(p => p.hand)
+                   .concat(tableCards.flatMap(m => m.cards))
+                   .map(c => c.value + c.suit)
+        );
+        const fresh = createDeck().filter(c => !inPlay.has(c.value + c.suit));
+        if (fresh.length === 0) break;
+        gameDeck.push(...fresh);
+    }
 }
 
 // ── WALIDACJA COMBO ───────────────────────────────────────────────────────────
