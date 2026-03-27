@@ -19,10 +19,27 @@
         #game-area { flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 16px; position: relative; overflow: hidden; }
 
         #stół {
-            background: rgba(255,255,255,0.03); width: 95%; flex-shrink: 0;
-            height: 320px; border-radius: 24px; border: 2px dashed #444;
-            display: flex; justify-content: center; align-items: flex-start;
-            gap: 40px; padding-top: 60px; position: relative; overflow: hidden;
+            background: radial-gradient(ellipse at center, rgba(0,90,35,0.22) 0%, rgba(255,255,255,0.02) 80%);
+            width: 95%; flex-shrink: 0;
+            height: 380px; border-radius: 50%;
+            border: 2px solid rgba(80,180,80,0.22);
+            position: relative; overflow: hidden;
+        }
+
+        .table-seat {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        .seat-name {
+            font-size: 0.75rem; color: var(--gold); font-weight: bold;
+            white-space: nowrap; text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+        }
+        .table-overlay {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 8px; overflow: auto;
         }
 
         .card-stack { position: relative; width: 80px; flex-shrink: 0; }
@@ -344,6 +361,17 @@
     let gameResolvingClient = false;
     let debugVisible = false;
     let canBlefClient = false;
+    let myPlayerIdx = 0;
+    let totalPlayers = 2;
+
+    // Seat positions (% of stół size). Index 0 = TY (always bottom-center).
+    const SEAT_DEFS = {
+        2: [{x:50, y:78}, {x:50, y:13}],
+        3: [{x:50, y:78}, {x:16, y:14}, {x:84, y:14}],
+        4: [{x:50, y:78}, {x:8,  y:50}, {x:50, y:13}, {x:92, y:50}],
+        5: [{x:50, y:78}, {x:12, y:62}, {x:19, y:14}, {x:81, y:14}, {x:88, y:62}],
+        6: [{x:50, y:78}, {x:8,  y:58}, {x:16, y:14}, {x:50, y:6},  {x:84, y:14}, {x:92, y:58}],
+    };
 
     window.onload = () => {
         myNick = prompt('Twój Nick:');
@@ -407,7 +435,10 @@
             </div>`;
         }).join('');
         if (myNick) {
-            const me = list.find(p => p.name === myNick);
+            totalPlayers = list.length;
+            const myIdx = list.findIndex(p => p.name === myNick);
+            if (myIdx !== -1) myPlayerIdx = myIdx;
+            const me = list[myIdx >= 0 ? myIdx : 0];
             const wasMyTurn = isMyTurn;
             isMyTurn = me ? me.isCurrent : false;
             amIHost = me ? me.isHost : false;
@@ -440,32 +471,56 @@
     socket.on('update-table-hidden', data => {
         const stol = document.getElementById('stół');
         stol.innerHTML = '';
+        const n = Math.max(2, Math.min(6, totalPlayers));
+        const defs = SEAT_DEFS[n] || SEAT_DEFS[2];
+
         data.forEach(p => {
+            const seatIdx = (p.playerIdx - myPlayerIdx + totalPlayers) % totalPlayers;
+            const def = defs[seatIdx];
+            if (!def) return;
+
             const cardCount = p.cards ? p.cards.length : 1;
             const isSmall = cardCount >= 5;
             const offset = isSmall ? 22 : 28;
             const baseH  = isSmall ? 84 : 115;
             const stackH = baseH + Math.max(0, cardCount - 1) * offset;
+
+            const seat = document.createElement('div');
+            seat.className = 'table-seat';
+            seat.style.left = def.x + '%';
+            seat.style.top  = def.y + '%';
+            if (def.y < 45) seat.style.transform = 'translate(-50%, -50%) rotate(180deg)';
+
             const stack = document.createElement('div');
             stack.className = 'card-stack' + (isSmall ? ' small' : '');
             stack.style.height = stackH + 'px';
             stack.innerHTML = `<div class="stack-info">${p.playerName}</div>`;
+
             if (p.cards && p.cards.length > 0) {
                 p.cards.forEach(c => stack.appendChild(makeCard(c)));
             } else {
                 const rev = document.createElement('div'); rev.className = 'karta zakryta'; stack.appendChild(rev);
             }
-            stol.appendChild(stack);
+
+            seat.appendChild(stack);
+            stol.appendChild(seat);
         });
     });
 
     socket.on('reveal-blef-anim', data => {
         const stol = document.getElementById('stół');
-        stol.innerHTML = `<h2 style="color:var(--danger);position:absolute;top:8px;font-size:1rem;">🚨 ${data.player} MIAŁ:</h2>`;
+        stol.innerHTML = '';
+        const overlay = document.createElement('div');
+        overlay.className = 'table-overlay';
+        const title = document.createElement('h2');
+        title.style.cssText = 'color:var(--danger);font-size:1rem;margin:0 0 10px;';
+        title.textContent = `🚨 ${data.player} MIAŁ:`;
         const wrap = document.createElement('div');
-        wrap.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:36px;';
+        wrap.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;';
         data.cards.forEach(c => { const el = makeCard(c); el.classList.add('in-reveal'); wrap.appendChild(el); });
-        stol.appendChild(wrap);
+        overlay.appendChild(title);
+        overlay.appendChild(wrap);
+        stol.appendChild(overlay);
     });
 
     socket.on('reveal-detailed', results => {
@@ -473,7 +528,9 @@
         cancelCombo();
         const stol = document.getElementById('stół');
         stol.innerHTML = '';
-        const row = document.createElement('div'); row.className = 'reveal-row';
+        const overlay = document.createElement('div');
+        overlay.className = 'table-overlay';
+        overlay.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;padding:8px 16px;overflow:auto;';
         results.forEach(r => {
             const div = document.createElement('div'); div.className = 'reveal-player';
             div.innerHTML = `<h4>${r.name}</h4>`;
@@ -482,9 +539,9 @@
             div.appendChild(cr);
             const pwr = document.createElement('div'); pwr.className = 'reveal-power';
             pwr.innerText = `${r.finalPower} pkt`; div.appendChild(pwr);
-            row.appendChild(div);
+            overlay.appendChild(div);
         });
-        stol.appendChild(row);
+        stol.appendChild(overlay);
     });
 
     socket.on('show-sks-modal', () => { isMyTurn = false; cancelCombo(); document.getElementById('sks-panel').style.display = 'block'; });
